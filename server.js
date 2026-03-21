@@ -1,8 +1,3 @@
-// ============================================================
-//  Attendance Management System — server.js
-//  Entry point. Run with: node server.js
-// ============================================================
-
 const express = require('express');
 const cors    = require('cors');
 const path    = require('path');
@@ -32,6 +27,76 @@ app.use('/api/auth',       authRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/face',       faceRoutes);
 app.use('/api/reports',    reportRoutes);
+
+
+// ─── One-time DB Setup ────────────────────────────────────
+app.get('/api/setup', async (req, res) => {
+  const db = require('./config/database');
+  const queries = [
+    `CREATE TABLE IF NOT EXISTS departments (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(100) NOT NULL UNIQUE,
+      description TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB`,
+    `CREATE TABLE IF NOT EXISTS users (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(100) NOT NULL,
+      email VARCHAR(150) NOT NULL UNIQUE,
+      password VARCHAR(255) NOT NULL,
+      role ENUM('admin','employee') NOT NULL DEFAULT 'employee',
+      department_id INT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_email (email),
+      INDEX idx_role (role)
+    ) ENGINE=InnoDB`,
+    `CREATE TABLE IF NOT EXISTS attendance (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      department_id INT,
+      check_in_time DATETIME,
+      check_out_time DATETIME,
+      check_in_lat DECIMAL(10,7),
+      check_in_lng DECIMAL(10,7),
+      check_out_lat DECIMAL(10,7),
+      check_out_lng DECIMAL(10,7),
+      selfie_path VARCHAR(255),
+      face_match_score DECIMAL(5,2),
+      work_type ENUM('office','wfh','field') DEFAULT 'office',
+      ip_address VARCHAR(45),
+      status ENUM('present','absent','late','half-day','wfh') DEFAULT 'present',
+      date DATE GENERATED ALWAYS AS (DATE(check_in_time)) STORED,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB`,
+    `CREATE TABLE IF NOT EXISTS face_data (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      employee_id INT NOT NULL UNIQUE,
+      face_id_encrypted TEXT NOT NULL,
+      iv VARCHAR(64) NOT NULL,
+      auth_tag VARCHAR(64) NOT NULL,
+      avg_score DECIMAL(5,2) DEFAULT 0,
+      verify_count INT DEFAULT 0,
+      enrolled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      last_verified_at DATETIME
+    ) ENGINE=InnoDB`,
+    `INSERT IGNORE INTO departments (name, description) VALUES
+      ('Engineering','Software development and IT'),
+      ('Marketing','Marketing and sales'),
+      ('HR','Human resources'),
+      ('Finance','Finance and accounting'),
+      ('Operations','Operations and support')`
+  ];
+  try {
+    for (const q of queries) await db.execute(q);
+    res.json({ success: true, message: 'All tables created successfully!' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 
 // ─── Health Check ─────────────────────────────────────────
 app.get('/api/health', (req, res) => {
