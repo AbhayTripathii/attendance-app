@@ -4,7 +4,18 @@ require("dotenv").config();
 let pool;
 
 if (process.env.DATABASE_URL) {
-  pool = mysql.createPool(process.env.DATABASE_URL + "?ssl={'rejectUnauthorized':false}");
+  const url = new URL(process.env.DATABASE_URL);
+  pool = mysql.createPool({
+    host: url.hostname,
+    port: parseInt(url.port),
+    user: url.username,
+    password: url.password,
+    database: url.pathname.replace('/', ''),
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    ssl: { rejectUnauthorized: false }
+  });
 } else {
   pool = mysql.createPool({
     host: process.env.DB_HOST || "localhost",
