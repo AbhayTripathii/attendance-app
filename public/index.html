@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AttendTrack — Login & Register</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    :root{
+      --bg:#0f0f0f;--surface:#181818;--surface2:#222;--border:#2a2a2a;--border2:#333;
+      --text:#f0f0ee;--muted:#888;--dim:#555;
+      --green:#3ddc84;--green-dim:#1a3d28;--green-glow:rgba(61,220,132,.15);
+      --red:#ff4d4d;--red-dim:#3d1a1a;
+      --amber:#f5a623;
+      --white:#fff;
+    }
+    body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;overflow-x:hidden}
+
+    /* ── noise grain overlay ── */
+    body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");pointer-events:none;z-index:0}
+
+    .wrap{position:relative;z-index:1;width:100%;max-width:880px;display:grid;grid-template-columns:1fr 1fr;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 0 80px rgba(0,0,0,.8),0 0 1px rgba(61,220,132,.1)}
+
+    /* ── LEFT PANEL ── */
+    .left{padding:52px 44px;background:linear-gradient(160deg,#0d1f15 0%,#0a1a10 60%,#050e08 100%);display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
+    .left::before{content:'';position:absolute;top:-60px;right:-60px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(61,220,132,.12) 0%,transparent 70%);pointer-events:none}
+    .left::after{content:'';position:absolute;bottom:-40px;left:-40px;width:180px;height:180px;border-radius:50%;background:radial-gradient(circle,rgba(61,220,132,.06) 0%,transparent 70%);pointer-events:none}
+    .left-tag{font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:3px;text-transform:uppercase;color:var(--green);opacity:.7;margin-bottom:36px}
+    .left h1{font-size:30px;font-weight:700;color:var(--white);line-height:1.2;margin-bottom:14px;letter-spacing:-.5px}
+    .left h1 span{color:var(--green)}
+    .left p{font-size:12px;color:rgba(255,255,255,.4);line-height:1.8}
+    .feat-list{margin-top:28px;display:flex;flex-direction:column;gap:10px}
+    .feat{display:flex;align-items:center;gap:10px;font-size:11px;color:rgba(255,255,255,.5)}
+    .feat-dot{width:5px;height:5px;border-radius:50%;background:var(--green);flex-shrink:0;box-shadow:0 0 6px var(--green)}
+    .left-f{font-family:'DM Mono',monospace;font-size:9px;color:rgba(255,255,255,.2);letter-spacing:1px}
+
+    /* ── RIGHT PANEL ── */
+    .right{padding:40px 38px;display:flex;flex-direction:column;justify-content:center;max-height:90vh;overflow-y:auto}
+    .right::-webkit-scrollbar{width:3px}
+    .right::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+    /* ── TABS ── */
+    .tabs{display:flex;background:var(--surface2);border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:22px}
+    .tab{flex:1;padding:9px;border:none;background:transparent;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;transition:all .2s;letter-spacing:.3px}
+    .tab.on{background:var(--green);color:#000}
+
+    /* ── ROLE TOGGLE ── */
+    .role-row{display:flex;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px;margin-bottom:18px}
+    .rbtn{flex:1;padding:7px;border:none;background:transparent;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;border-radius:4px;transition:all .2s}
+    .rbtn.on{background:var(--surface);color:var(--green);border:1px solid var(--border2)}
+
+    /* ── PANELS ── */
+    .panel{display:none}.panel.on{display:block}
+
+    /* ── FIELDS ── */
+    .field{margin-bottom:11px}
+    .field label{display:block;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);margin-bottom:5px}
+    .field input,.field select{width:100%;padding:9px 12px;border:1px solid var(--border2);border-radius:5px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;color:var(--text);background:var(--surface2);outline:none;transition:border-color .15s,box-shadow .15s}
+    .field input:focus,.field select:focus{border-color:var(--green);box-shadow:0 0 0 3px var(--green-glow)}
+    .field input::placeholder{color:var(--dim);font-weight:400}
+    .field select option{background:var(--surface2)}
+    .g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+    /* ── BUTTONS ── */
+    .btn-main{width:100%;padding:11px;background:var(--green);color:#000;border:none;border-radius:5px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;margin-top:6px;transition:all .15s}
+    .btn-main:hover{background:#52e899;transform:translateY(-1px)}
+    .btn-main:disabled{background:var(--border2);color:var(--dim);cursor:not-allowed;transform:none}
+
+    /* ── MESSAGES ── */
+    .err-msg{font-size:11px;color:var(--red);padding:9px 12px;background:var(--red-dim);border-left:2px solid var(--red);border-radius:4px;margin-bottom:10px;display:none;font-weight:600}
+    .ok-msg{font-size:11px;color:var(--green);padding:9px 12px;background:var(--green-dim);border-left:2px solid var(--green);border-radius:4px;margin-bottom:10px;display:none;font-weight:600}
+
+    /* ── HINTS ── */
+    .hint{margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
+    .hint-lbl{font-family:'DM Mono',monospace;font-size:9px;font-weight:500;letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-bottom:7px}
+    .hint-row{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px}
+    .hint-row span:last-child{color:var(--green);font-weight:600;font-family:'DM Mono',monospace}
+    .sw{text-align:center;font-size:11px;color:var(--muted);margin-top:10px}
+    .sw a{color:var(--green);font-weight:600;cursor:pointer}
+
+    /* ── JOIN NOTICE ── */
+    .join-notice{background:var(--green-dim);border:1px solid rgba(61,220,132,.3);border-radius:5px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:var(--green);font-weight:600;display:none}
+    .join-notice span{font-weight:400;color:var(--muted);display:block;margin-top:2px;font-size:10px}
+
+    /* ══════════════════════════════════════════
+       FACE CAPTURE SECTION (in employee register)
+    ══════════════════════════════════════════ */
+    .face-section{margin:12px 0;border:1px solid var(--border2);border-radius:8px;overflow:hidden;background:var(--surface2)}
+    .face-section-head{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+    .face-section-head h4{font-size:11px;font-weight:700;color:var(--text);letter-spacing:.3px}
+    .face-req{font-size:9px;color:var(--muted);font-weight:500}
+    .face-req.met{color:var(--green)}
+
+    /* Camera wrapper */
+    .cam-wrap{position:relative;background:#000;aspect-ratio:4/3;overflow:hidden}
+    .cam-wrap video{width:100%;height:100%;object-fit:cover;display:block;transform:scaleX(-1)} /* mirror */
+    .cam-inactive-ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:var(--surface2)}
+    .cam-inactive-ov .ic{font-size:32px;opacity:.3}
+    .cam-inactive-ov p{font-size:11px;color:var(--muted);text-align:center;line-height:1.5}
+
+    /* Face oval guide */
+    .face-oval{position:absolute;top:50%;left:50%;transform:translate(-50%,-52%);width:110px;height:140px;border-radius:50%;border:2px dashed rgba(61,220,132,.5);pointer-events:none;transition:border-color .3s,box-shadow .3s}
+    .face-oval.good{border-color:var(--green);border-style:solid;box-shadow:0 0 20px rgba(61,220,132,.3),inset 0 0 20px rgba(61,220,132,.05)}
+    .face-oval.bad{border-color:var(--red);border-style:solid}
+
+    /* Corner guides */
+    .corner{position:absolute;width:16px;height:16px;pointer-events:none}
+    .corner.tl{top:10px;left:10px;border-top:2px solid var(--green);border-left:2px solid var(--green)}
+    .corner.tr{top:10px;right:10px;border-top:2px solid var(--green);border-right:2px solid var(--green)}
+    .corner.bl{bottom:10px;left:10px;border-bottom:2px solid var(--green);border-left:2px solid var(--green)}
+    .corner.br{bottom:10px;right:10px;border-bottom:2px solid var(--green);border-right:2px solid var(--green)}
+
+    /* Scan line animation */
+    .scan-line{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--green),transparent);animation:scandown 2.5s ease-in-out infinite;display:none}
+    @keyframes scandown{0%{top:10%;opacity:0}10%{opacity:1}90%{opacity:1}100%{top:90%;opacity:0}}
+    .cam-wrap.scanning .scan-line{display:block}
+
+    /* Quality bar */
+    .quality-bar-wrap{padding:8px 12px;display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--border)}
+    .quality-label{font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim);white-space:nowrap}
+    .quality-track{flex:1;height:3px;background:var(--border2);border-radius:2px;overflow:hidden}
+    .quality-fill{height:100%;border-radius:2px;background:var(--muted);transition:width .3s,background .3s}
+    .quality-fill.low{background:var(--red)}
+    .quality-fill.mid{background:var(--amber)}
+    .quality-fill.high{background:var(--green)}
+    .quality-val{font-family:'DM Mono',monospace;font-size:10px;font-weight:500;color:var(--muted);min-width:30px;text-align:right}
+
+    /* Tips */
+    .face-tip{padding:7px 12px;font-size:10px;color:var(--amber);font-weight:500;background:rgba(245,166,35,.06);border-bottom:1px solid var(--border);display:none}
+    .face-tip.show{display:block}
+
+    /* Cam controls */
+    .cam-controls{padding:10px 12px;display:flex;gap:7px}
+    .cam-btn{flex:1;padding:8px;border:1px solid var(--border2);border-radius:5px;background:transparent;font-family:'DM Sans',sans-serif;font-size:10px;font-weight:700;color:var(--muted);cursor:pointer;transition:all .15s;letter-spacing:.3px}
+    .cam-btn:hover{border-color:var(--green);color:var(--green)}
+    .cam-btn.primary{background:var(--green);color:#000;border-color:var(--green)}
+    .cam-btn.primary:hover{background:#52e899}
+    .cam-btn:disabled{opacity:.3;cursor:not-allowed}
+
+    /* Captured preview */
+    .captured-wrap{display:none;padding:10px 12px;border-top:1px solid var(--border)}
+    .captured-wrap.show{display:block}
+    .captured-lbl{font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-bottom:6px}
+    .captured-img{width:80px;height:80px;object-fit:cover;border-radius:50%;border:2px solid var(--green);box-shadow:0 0 12px rgba(61,220,132,.3)}
+    .captured-info{display:flex;align-items:center;gap:12px}
+    .captured-meta{font-size:11px;color:var(--muted)}
+    .captured-meta strong{color:var(--green);display:block;font-size:13px;margin-bottom:2px}
+
+    /* Verify animation overlay */
+    .verify-ov{position:absolute;inset:0;background:rgba(10,26,16,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;opacity:0;pointer-events:none;transition:opacity .3s}
+    .verify-ov.show{opacity:1;pointer-events:all}
+    .verify-ring{width:70px;height:70px;border-radius:50%;border:2px solid var(--border2);position:relative;display:flex;align-items:center;justify-content:center}
+    .verify-ring::before{content:'';position:absolute;inset:0;border-radius:50%;border:2px solid transparent;border-top-color:var(--green);animation:spin 1s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .verify-tick{font-size:28px;display:none}
+    .verify-ring.done::before{display:none}
+    .verify-ring.done .verify-tick{display:block}
+    .verify-label{font-size:11px;font-weight:600;color:var(--green);letter-spacing:.5px}
+    .verify-score{font-family:'DM Mono',monospace;font-size:22px;font-weight:500;color:var(--green);display:none}
+
+    /* Steps indicator */
+    .reg-steps{display:flex;gap:0;margin-bottom:16px;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+    .reg-step{flex:1;padding:8px 6px;text-align:center;font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--dim);background:var(--surface2);border-right:1px solid var(--border);cursor:default;transition:all .2s}
+    .reg-step:last-child{border-right:none}
+    .reg-step.active{color:var(--green);background:var(--green-dim)}
+    .reg-step.done{color:var(--text);background:var(--surface)}
+    .reg-step.done::before{content:'✓ '}
+
+    @media(max-width:640px){.wrap{grid-template-columns:1fr}.left{display:none}.right{padding:28px 20px}}
+  </style>
+</head>
+<body>
+
+<div class="wrap">
+  <!-- LEFT -->
+  <div class="left">
+    <div>
+      <div class="left-tag">AttendTrack v2</div>
+      <h1>Smart<br><span>Attendance</span><br>System</h1>
+      <p>Biometric face recognition paired with real-time GPS verification — attendance you can trust.</p>
+      <div class="feat-list">
+        <div class="feat"><div class="feat-dot"></div>Live face enrollment at registration</div>
+        <div class="feat"><div class="feat-dot"></div>Face match verification on every check-in</div>
+        <div class="feat"><div class="feat-dot"></div>GPS location captured at check-in & out</div>
+        <div class="feat"><div class="feat-dot"></div>Tamper-proof attendance records</div>
+      </div>
+    </div>
+    <div class="left-f">FACE · GPS · VERIFIED</div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="right">
+    <div class="tabs">
+      <button class="tab on" id="t-login" onclick="switchMode('login')">Sign In</button>
+      <button class="tab" id="t-reg" onclick="switchMode('register')">Register</button>
+    </div>
+
+    <!-- ══ LOGIN ══ -->
+    <div class="panel on" id="p-login">
+      <div class="role-row">
+        <button class="rbtn on" id="r-admin" onclick="setRole('admin')">Admin</button>
+        <button class="rbtn" id="r-emp" onclick="setRole('employee')">Employee</button>
+      </div>
+      <div class="err-msg" id="loginErr"></div>
+      <div class="field"><label>Email</label><input id="lEmail" type="email" placeholder="you@company.in" onkeydown="if(event.key==='Enter')doLogin()"/></div>
+      <div class="field"><label>Password</label><input id="lPw" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/></div>
+      <button class="btn-main" onclick="doLogin()">Sign In →</button>
+    </div>
+
+    <!-- ══ REGISTER ══ -->
+    <div class="panel" id="p-reg">
+
+      <!-- Admin register -->
+      <div class="panel on" id="rp-admin">
+        <div class="role-row" id="reg-role-row-a">
+          <button class="rbtn on" id="rr-admin" onclick="setRegRole('admin')">Admin</button>
+          <button class="rbtn" id="rr-emp" onclick="setRegRole('employee')">Employee</button>
+        </div>
+        <div class="err-msg" id="regErrAdmin"></div>
+        <div class="ok-msg" id="regOkAdmin"></div>
+        <div class="g2">
+          <div class="field"><label>First Name</label><input id="aFirst" placeholder="Abhay"/></div>
+          <div class="field"><label>Last Name</label><input id="aLast" placeholder="Tripathi"/></div>
+        </div>
+        <div class="field"><label>Email</label><input id="aEmail" type="email" placeholder="admin@company.in"/></div>
+        <div class="field"><label>Company Name</label><input id="aCompany" placeholder="Tripathi Technologies"/></div>
+        <div class="field"><label>Password</label><input id="aPw" type="password" placeholder="Min 6 characters"/></div>
+        <button class="btn-main" onclick="doRegAdmin()">Create Company Account →</button>
+      </div>
+
+      <!-- Employee register (multi-step) -->
+      <div class="panel" id="rp-emp">
+        <div class="join-notice" id="joinNotice">
+          Joining via company invite link
+          <span id="joinCompanyName"></span>
+        </div>
+
+        <!-- Step indicator -->
+        <div class="reg-steps">
+          <div class="reg-step active" id="step-lbl-1">Details</div>
+          <div class="reg-step" id="step-lbl-2">Face Photo</div>
+          <div class="reg-step" id="step-lbl-3">Done</div>
+        </div>
+
+        <div class="err-msg" id="regErrEmp"></div>
+        <div class="ok-msg" id="regOkEmp"></div>
+
+        <!-- STEP 1: Personal details -->
+        <div id="emp-step1">
+          <div class="role-row" id="reg-role-row-e" style="margin-bottom:14px">
+            <button class="rbtn" id="rr-admin2" onclick="setRegRole('admin')">Admin</button>
+            <button class="rbtn on" id="rr-emp2" onclick="setRegRole('employee')">Employee</button>
+          </div>
+
+          <!-- Company Code lookup (shown unless coming via ?join= link) -->
+          <div id="companyLookupBlock">
+            <div style="background:rgba(61,220,132,.06);border:1px solid rgba(61,220,132,.2);border-radius:6px;padding:12px 14px;margin-bottom:14px">
+              <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Step 1 of 2 — Find Your Company</div>
+              <p style="font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:10px">Ask your Admin for the <strong style="color:var(--text)">Company Code</strong>. Every admin can find it in their dashboard under Departments.</p>
+              <div style="display:flex;gap:8px">
+                <input id="companyCodeInput" placeholder="e.g.  CO-1749123456789" style="flex:1;padding:9px 12px;border:1px solid var(--border2);border-radius:5px;font-family:'DM Mono',monospace;font-size:12px;font-weight:500;color:var(--text);background:var(--surface2);outline:none;transition:border-color .15s" onkeydown="if(event.key==='Enter')lookupCompany()"/>
+                <button onclick="lookupCompany()" style="padding:9px 16px;background:var(--green);color:#000;border:none;border-radius:5px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Find →</button>
+              </div>
+              <div id="companyLookupErr" style="display:none;margin-top:7px;font-size:11px;color:var(--red);font-weight:600"></div>
+            </div>
+
+            <!-- Company found banner -->
+            <div id="companyFoundBanner" style="display:none;background:var(--green-dim);border:1px solid rgba(61,220,132,.3);border-radius:5px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">
+              <div>
+                <div style="font-size:12px;font-weight:700;color:var(--green)" id="companyFoundName">—</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:2px">Company verified ✓</div>
+              </div>
+              <button onclick="resetCompanyLookup()" style="background:none;border:1px solid var(--border2);border-radius:4px;padding:4px 9px;font-size:10px;color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif">Change</button>
+            </div>
+          </div>
+
+          <div class="g2">
+            <div class="field"><label>First Name</label><input id="eFirst" placeholder="Arjun"/></div>
+            <div class="field"><label>Last Name</label><input id="eLast" placeholder="Sharma"/></div>
+          </div>
+          <div class="field"><label>Email</label><input id="eEmail" type="email" placeholder="arjun@company.in"/></div>
+          <div class="field"><label>Phone</label><input id="ePhone" placeholder="+91 98765 43210"/></div>
+          <div class="field">
+            <label>Department</label>
+            <select id="eDept"><option value="">— Select Department —</option></select>
+          </div>
+          <div class="field"><label>Position / Role</label><input id="ePos" placeholder="Software Engineer"/></div>
+          <div class="field"><label>Password</label><input id="ePw" type="password" placeholder="Min 6 characters"/></div>
+          <button class="btn-main" id="nextFaceBtn" onclick="goToFaceStep()">Next: Capture Face Photo →</button>
+        </div>
+
+        <!-- STEP 2: Face photo capture -->
+        <div id="emp-step2" style="display:none">
+          <p style="font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.6">
+            Take a clear selfie for face verification. This photo will be used every time you check in or out.
+          </p>
+
+          <div class="face-section">
+            <div class="face-section-head">
+              <h4>📷 Face Enrollment</h4>
+              <span class="face-req" id="faceReqLabel">Photo required</span>
+            </div>
+
+            <!-- Camera -->
+            <div class="cam-wrap" id="regCamWrap">
+              <video id="regVid" autoplay muted playsinline></video>
+              <canvas id="regCvs" style="display:none"></canvas>
+              <div class="face-oval" id="faceOval"></div>
+              <div class="corner tl"></div>
+              <div class="corner tr"></div>
+              <div class="corner bl"></div>
+              <div class="corner br"></div>
+              <div class="scan-line"></div>
+
+              <!-- Inactive overlay -->
+              <div class="cam-inactive-ov" id="regCamOv">
+                <div class="ic">👤</div>
+                <p>Click <strong style="color:var(--green)">Open Camera</strong><br>to begin face enrollment</p>
+              </div>
+
+              <!-- Verify animation overlay -->
+              <div class="verify-ov" id="regVerifyOv">
+                <div class="verify-ring" id="regVerifyRing">
+                  <span class="verify-tick">✓</span>
+                </div>
+                <div class="verify-label" id="regVerifyLabel">Analysing face…</div>
+                <div class="verify-score" id="regVerifyScore"></div>
+              </div>
+            </div>
+
+            <!-- Quality bar -->
+            <div class="quality-bar-wrap" id="qualityBarWrap" style="display:none">
+              <span class="quality-label">Clarity</span>
+              <div class="quality-track"><div class="quality-fill" id="qualityFill" style="width:0%"></div></div>
+              <span class="quality-val" id="qualityVal">—</span>
+            </div>
+
+            <!-- Tip -->
+            <div class="face-tip" id="faceTip">⚠ Face not centred — align with the oval</div>
+
+            <!-- Controls -->
+            <div class="cam-controls">
+              <button class="cam-btn" id="regBtnOpen" onclick="openRegCam()">Open Camera</button>
+              <button class="cam-btn primary" id="regBtnSnap" onclick="snapRegFace()" disabled>Capture Photo</button>
+            </div>
+
+            <!-- Captured preview -->
+            <div class="captured-wrap" id="capturedWrap">
+              <div class="captured-lbl">Enrolled Face Photo</div>
+              <div class="captured-info">
+                <img id="capturedImg" class="captured-img" src="" alt="Face">
+                <div class="captured-meta">
+                  <strong id="capturedScore">—</strong>
+                  Photo quality score
+                  <div style="margin-top:6px;font-size:10px;color:var(--green)">✓ Ready for verification</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="cam-btn" style="flex:0 0 auto;padding:10px 16px" onclick="backToStep1()">← Back</button>
+            <button class="btn-main" id="regSubmitBtn" onclick="doRegEmp()" disabled style="margin-top:0">Complete Registration →</button>
+          </div>
+        </div>
+
+      </div><!-- rp-emp -->
+    </div><!-- p-reg -->
+  </div><!-- right -->
+</div><!-- wrap -->
+
+<!-- face-api.js from CDN — real neural network face recognition -->
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+// ══════════════════════════════════════
+//  DB helpers (localStorage)
+// ══════════════════════════════════════
+const DB_KEY = 'at_db';
+function getDB(){try{return JSON.parse(localStorage.getItem(DB_KEY))||null}catch(e){return null}}
+function saveDB(d){localStorage.setItem(DB_KEY,JSON.stringify(d))}
+function freshDB(){
+  const d={companies:[],admins:[],departments:[],employees:[],attendance:[]};
+  saveDB(d);return d;
+}
+function db(){return getDB()||freshDB();}
+
+// ══════════════════════════════════════
+//  face-api.js model loading
+// ══════════════════════════════════════
+// Models are hosted on jsDelivr — no server needed
+const MODEL_URL='https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model';
+let faceApiReady=false;
+
+async function loadFaceModels(){
+  try{
+    await Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+      faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+      faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+    ]);
+    faceApiReady=true;
+    console.log('✅ face-api.js models loaded');
+  } catch(e){
+    console.warn('⚠ face-api models failed to load:',e.message);
+    faceApiReady=false;
+  }
+}
+// Start loading immediately on page load
+loadFaceModels();
+
+// ══════════════════════════════════════
+//  URL params (join link)
+// ══════════════════════════════════════
+const urlP=new URLSearchParams(location.search);
+const joinDeptId=urlP.get('join')||'';
+const joinCoId=urlP.get('co')||'';
+
+let loginRole='admin', regRole='admin';
+let regFaceBase64=null, regFaceDescriptor=null;
+let regStream=null, regQualityTimer=null, regDetectionTimer=null;
+let lockedCompanyId='';
+
+window.addEventListener('DOMContentLoaded',()=>{
+  if(joinDeptId){
+    switchMode('register');
+    setRegRole('employee');
+    document.getElementById('reg-role-row-a') && (document.getElementById('reg-role-row-a').style.display='none');
+    document.getElementById('reg-role-row-e') && (document.getElementById('reg-role-row-e').style.display='none');
+    document.getElementById('companyLookupBlock').style.display='none';
+    const d=db();
+    const dept=(d.departments||[]).find(x=>x.id===joinDeptId);
+    const co=(d.companies||[]).find(x=>x.id===joinCoId);
+    if(dept&&co){
+      lockedCompanyId=co.id;
+      document.getElementById('joinNotice').style.display='block';
+      document.getElementById('joinCompanyName').textContent=co.name+' · '+dept.name;
+    }
+    populateEmpDepts(joinCoId||'');
+    setTimeout(()=>{ document.getElementById('eDept').value=joinDeptId; },50);
+  } else {
+    populateEmpDepts('');
+  }
+});
+
+// ══════════════════════════════════════
+//  Mode / role switching
+// ══════════════════════════════════════
+function switchMode(m){
+  document.getElementById('p-login').classList.toggle('on',m==='login');
+  document.getElementById('p-reg').classList.toggle('on',m==='register');
+  document.getElementById('t-login').classList.toggle('on',m==='login');
+  document.getElementById('t-reg').classList.toggle('on',m==='register');
+  if(m==='login') stopRegCam();
+}
+function setRole(r){
+  loginRole=r;
+  document.getElementById('r-admin').classList.toggle('on',r==='admin');
+  document.getElementById('r-emp').classList.toggle('on',r==='employee');
+}
+function setRegRole(r){
+  regRole=r;
+  ['rr-admin','rr-admin2'].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.toggle('on',r==='admin')});
+  ['rr-emp','rr-emp2'].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.toggle('on',r==='employee')});
+  document.getElementById('rp-admin').classList.toggle('on',r==='admin');
+  document.getElementById('rp-emp').classList.toggle('on',r==='employee');
+}
+
+function populateEmpDepts(lockCoId){
+  const d=db(); const sel=document.getElementById('eDept');
+  let depts=d.departments||[];
+  if(lockCoId) depts=depts.filter(x=>x.companyId===lockCoId);
+  sel.innerHTML='<option value="">— Select Department —</option>'+depts.map(dep=>`<option value="${dep.id}">${dep.name}</option>`).join('');
+  if(lockCoId&&depts.length===1) sel.value=depts[0].id;
+}
+
+// ── Company Code lookup ──
+function lookupCompany(){
+  const code=document.getElementById('companyCodeInput').value.trim();
+  const errEl=document.getElementById('companyLookupErr');
+  errEl.style.display='none';
+  if(!code){errEl.textContent='Enter a company code.';errEl.style.display='block';return;}
+  const d=db();
+  const co=(d.companies||[]).find(x=>x.id===code);
+  if(!co){errEl.textContent='Company not found. Check the code and try again.';errEl.style.display='block';return;}
+  lockedCompanyId=co.id;
+  document.getElementById('companyFoundBanner').style.display='flex';
+  document.getElementById('companyFoundName').textContent=co.name;
+  document.getElementById('companyCodeInput').closest('div').style.display='none';
+  populateEmpDepts(co.id);
+}
+function resetCompanyLookup(){
+  lockedCompanyId='';
+  document.getElementById('companyFoundBanner').style.display='none';
+  document.getElementById('companyCodeInput').closest('div').style.display='flex';
+  document.getElementById('companyCodeInput').value='';
+  document.getElementById('eDept').innerHTML='<option value="">— Select Department —</option>';
+  document.getElementById('companyLookupErr').style.display='none';
+}
+
+// ══════════════════════════════════════
+//  Step navigation (employee register)
+// ══════════════════════════════════════
+function setStep(n){
+  for(let i=1;i<=3;i++){
+    const lbl=document.getElementById('step-lbl-'+i);
+    lbl.className='reg-step'+(i<n?' done':i===n?' active':'');
+  }
+}
+function goToFaceStep(){
+  const first=document.getElementById('eFirst').value.trim();
+  const last=document.getElementById('eLast').value.trim();
+  const email=document.getElementById('eEmail').value.trim();
+  const deptId=document.getElementById('eDept').value;
+  const pw=document.getElementById('ePw').value;
+  const err=document.getElementById('regErrEmp');
+  if(!lockedCompanyId&&!joinCoId){showMsg(err,'Enter your Company Code first to find your company.');return;}
+  if(!first||!last||!email||!deptId||!pw){showMsg(err,'All fields are required.');return;}
+  if(pw.length<6){showMsg(err,'Password must be 6+ characters.');return;}
+  const d=db();
+  if((d.employees||[]).find(e=>e.email.toLowerCase()===email.toLowerCase())){showMsg(err,'Email already registered.');return;}
+  document.getElementById('emp-step1').style.display='none';
+  document.getElementById('emp-step2').style.display='block';
+  setStep(2);
+}
+function backToStep1(){
+  stopRegCam();
+  document.getElementById('emp-step2').style.display='none';
+  document.getElementById('emp-step1').style.display='block';
+  setStep(1);
+}
+
+// ══════════════════════════════════════
+//  REGISTRATION CAMERA & FACE CAPTURE
+//  Using face-api.js for real detection
+// ══════════════════════════════════════
+async function openRegCam(){
+  const btn=document.getElementById('regBtnOpen');
+  btn.textContent='Starting…'; btn.disabled=true;
+  try{
+    regStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
+    const vid=document.getElementById('regVid');
+    vid.srcObject=regStream;
+    document.getElementById('regCamOv').style.display='none';
+    document.getElementById('qualityBarWrap').style.display='flex';
+    document.getElementById('regCamWrap').classList.add('scanning');
+    btn.textContent='Stop Camera'; btn.disabled=false; btn.onclick=stopRegCam;
+    // Start real face detection loop
+    startFaceDetectionLoop();
+  } catch(e){
+    document.getElementById('regCamOv').innerHTML=`<div class="ic">📷</div><p style="color:var(--muted)">Camera not available<br><strong style="color:var(--green)">Allow camera access in browser</strong></p>`;
+    btn.textContent='Open Camera'; btn.disabled=false;
+  }
+}
+
+// Real-time face detection using TinyFaceDetector (runs every 400ms)
+function startFaceDetectionLoop(){
+  if(regDetectionTimer) clearInterval(regDetectionTimer);
+  regDetectionTimer=setInterval(async()=>{
+    if(!regStream){clearInterval(regDetectionTimer);return;}
+    const vid=document.getElementById('regVid');
+    if(!vid.srcObject||vid.readyState<2) return;
+
+    const fill=document.getElementById('qualityFill');
+    const val=document.getElementById('qualityVal');
+    const oval=document.getElementById('faceOval');
+    const tip=document.getElementById('faceTip');
+    const snapBtn=document.getElementById('regBtnSnap');
+
+    if(!faceApiReady){
+      // Models not loaded yet — show neutral state
+      fill.style.width='30%'; fill.className='quality-fill mid';
+      val.textContent='Loading AI…'; oval.className='face-oval';
+      tip.textContent='⏳ Loading face recognition models…'; tip.classList.add('show');
+      return;
+    }
+
+    try{
+      const detection=await faceapi
+        .detectSingleFace(vid, new faceapi.TinyFaceDetectorOptions({inputSize:224,scoreThreshold:0.4}))
+        .withFaceLandmarks();
+
+      if(!detection){
+        // No face found
+        fill.style.width='15%'; fill.className='quality-fill low';
+        val.textContent='No face';
+        oval.className='face-oval bad';
+        tip.textContent='⚠ No face detected — look directly at the camera';
+        tip.classList.add('show');
+        snapBtn.disabled=true;
+      } else {
+        // Face found — score based on detection confidence
+        const conf=detection.detection.score;
+        const q=Math.round(conf*100);
+        fill.style.width=q+'%';
+        val.textContent=q+'%';
+
+        if(q>=80){
+          fill.className='quality-fill high';
+          oval.className='face-oval good';
+          tip.classList.remove('show');
+          snapBtn.disabled=false;
+        } else {
+          fill.className='quality-fill mid';
+          oval.className='face-oval';
+          tip.textContent='⚠ Move closer and face the camera directly';
+          tip.classList.add('show');
+          snapBtn.disabled=false; // allow but warn
+        }
+      }
+    } catch(e){
+      // Detection error — allow capture anyway
+      snapBtn.disabled=false;
+    }
+  },400);
+}
+
+function stopRegCam(){
+  if(regStream) regStream.getTracks().forEach(t=>t.stop());
+  if(regDetectionTimer) clearInterval(regDetectionTimer);
+  regStream=null; regDetectionTimer=null;
+  document.getElementById('regCamOv').style.display='flex';
+  document.getElementById('regCamOv').innerHTML='<div class="ic">👤</div><p>Click <strong style="color:var(--green)">Open Camera</strong><br>to begin face enrollment</p>';
+  document.getElementById('regBtnSnap').disabled=true;
+  document.getElementById('regBtnOpen').textContent='Open Camera';
+  document.getElementById('regBtnOpen').onclick=openRegCam;
+  document.getElementById('regBtnOpen').disabled=false;
+  document.getElementById('qualityBarWrap').style.display='none';
+  document.getElementById('regCamWrap').classList.remove('scanning');
+  document.getElementById('faceTip').classList.remove('show');
+  document.getElementById('faceOval').className='face-oval';
+}
+
+async function snapRegFace(){
+  const vid=document.getElementById('regVid');
+  const cvs=document.getElementById('regCvs');
+  const ctx=cvs.getContext('2d');
+  const snapBtn=document.getElementById('regBtnSnap');
+  snapBtn.disabled=true;
+
+  // Draw current frame to canvas (un-mirrored for storage)
+  cvs.width=vid.videoWidth||640; cvs.height=vid.videoHeight||480;
+  ctx.save(); ctx.scale(-1,1); ctx.drawImage(vid,-cvs.width,0); ctx.restore();
+  const base64=cvs.toDataURL('image/jpeg',0.9);
+
+  // Show overlay
+  const ov=document.getElementById('regVerifyOv');
+  const ring=document.getElementById('regVerifyRing');
+  const label=document.getElementById('regVerifyLabel');
+  const scoreEl=document.getElementById('regVerifyScore');
+  ov.classList.add('show');
+  ring.className='verify-ring';
+  scoreEl.style.display='none';
+  label.textContent='Detecting face…';
+
+  try{
+    if(!faceApiReady) throw new Error('Models not loaded');
+
+    label.textContent='Extracting face landmarks…';
+    const detection=await faceapi
+      .detectSingleFace(vid, new faceapi.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:0.5}))
+      .withFaceLandmarks()
+      .withFaceDescriptor();
+
+    if(!detection){
+      throw new Error('NO_FACE');
+    }
+
+    label.textContent='Generating biometric profile…';
+    await new Promise(r=>setTimeout(r,600));
+
+    // Store the 128-float descriptor as a plain array
+    regFaceDescriptor=Array.from(detection.descriptor);
+    regFaceBase64=base64;
+
+    ring.className='verify-ring done';
+    label.textContent='Face enrolled successfully!';
+    scoreEl.textContent='✓ Biometric data captured';
+    scoreEl.style.display='block';
+
+    setTimeout(()=>{
+      ov.classList.remove('show');
+      stopRegCam();
+      document.getElementById('capturedImg').src=base64;
+      document.getElementById('capturedScore').textContent='Enrolled';
+      document.getElementById('capturedWrap').classList.add('show');
+      document.getElementById('faceReqLabel').textContent='✓ Face enrolled';
+      document.getElementById('faceReqLabel').className='face-req met';
+      document.getElementById('regSubmitBtn').disabled=false;
+      setStep(3);
+    },1200);
+
+  } catch(e){
+    ov.classList.remove('show');
+    snapBtn.disabled=false;
+    if(e.message==='NO_FACE'){
+      document.getElementById('faceTip').textContent='❌ No face detected — look directly at the camera and try again';
+      document.getElementById('faceTip').classList.add('show');
+      showMsg(document.getElementById('regErrEmp'),'No face detected. Please face the camera directly and ensure good lighting.','err');
+    } else {
+      // Fallback: store photo only (no descriptor) if models failed
+      regFaceBase64=base64;
+      regFaceDescriptor=null;
+      document.getElementById('capturedImg').src=base64;
+      document.getElementById('capturedScore').textContent='Photo only';
+      document.getElementById('capturedWrap').classList.add('show');
+      document.getElementById('faceReqLabel').textContent='⚠ Photo captured (AI unavailable)';
+      document.getElementById('regSubmitBtn').disabled=false;
+      setStep(3);
+    }
+  }
+}
+
+// ══════════════════════════════════════
+//  LOGIN
+// ══════════════════════════════════════
+function doLogin(){
+  const email=document.getElementById('lEmail').value.trim().toLowerCase();
+  const pw=document.getElementById('lPw').value;
+  const err=document.getElementById('loginErr');
+  if(!email||!pw){showMsg(err,'Email and password are required.');return;}
+  const d=db();
+  if(loginRole==='admin'){
+    const a=d.admins.find(x=>x.email.toLowerCase()===email&&x.pw===pw);
+    if(a){
+      sessionStorage.setItem('at_session',JSON.stringify({role:'admin',id:a.id,name:a.name,companyId:a.companyId,setupDone:a.setupDone}));
+      location.href='admin.html';
+    } else showMsg(err,'Invalid admin credentials.');
+  } else {
+    const e=d.employees.find(x=>x.email.toLowerCase()===email&&x.pw===pw);
+    if(e){
+      sessionStorage.setItem('at_session',JSON.stringify({role:'employee',id:e.id,name:e.name,deptId:e.deptId,companyId:e.companyId,profileDone:e.profileDone}));
+      location.href='employee.html';
+    } else showMsg(err,'No account found. Please register first.');
+  }
+}
+
+// ══════════════════════════════════════
+//  REGISTER — Admin
+// ══════════════════════════════════════
+function doRegAdmin(){
+  const first=document.getElementById('aFirst').value.trim();
+  const last=document.getElementById('aLast').value.trim();
+  const email=document.getElementById('aEmail').value.trim().toLowerCase();
+  const company=document.getElementById('aCompany').value.trim();
+  const pw=document.getElementById('aPw').value;
+  const err=document.getElementById('regErrAdmin');
+  const ok=document.getElementById('regOkAdmin');
+  if(!first||!last||!email||!company||!pw){showMsg(err,'All fields are required.');return;}
+  if(pw.length<6){showMsg(err,'Password must be 6+ characters.');return;}
+  const d=db();
+  if(d.admins.find(a=>a.email.toLowerCase()===email)){showMsg(err,'Email already registered.');return;}
+  const coId='CO-'+Date.now(), admId='ADM-'+Date.now();
+  d.companies.push({id:coId,name:company,adminId:admId,createdAt:new Date().toISOString()});
+  d.admins.push({id:admId,name:first+' '+last,email,pw,companyId:coId,setupDone:false,createdAt:new Date().toISOString()});
+  saveDB(d);
+  showMsg(ok,'Account created! Redirecting…','ok');
+  setTimeout(()=>{sessionStorage.setItem('at_session',JSON.stringify({role:'admin',id:admId,name:first+' '+last,companyId:coId,setupDone:false}));location.href='admin.html';},1400);
+}
+
+// ══════════════════════════════════════
+//  REGISTER — Employee (stores descriptor)
+// ══════════════════════════════════════
+function doRegEmp(){
+  if(!regFaceBase64){showMsg(document.getElementById('regErrEmp'),'Please capture your face photo first.');return;}
+  const first=document.getElementById('eFirst').value.trim();
+  const last=document.getElementById('eLast').value.trim();
+  const email=document.getElementById('eEmail').value.trim().toLowerCase();
+  const phone=document.getElementById('ePhone').value.trim();
+  const deptId=document.getElementById('eDept').value;
+  const pos=document.getElementById('ePos').value.trim();
+  const pw=document.getElementById('ePw').value;
+  const err=document.getElementById('regErrEmp');
+  const ok=document.getElementById('regOkEmp');
+  const d=db();
+  const dept=d.departments.find(x=>x.id===deptId);
+  if(!dept){showMsg(err,'Invalid department. Please re-enter your company code.');return;}
+  const empId='EMP-'+String((d.employees||[]).length+1).padStart(3,'0');
+  const todayStr=new Date().toISOString().split('T')[0];
+  const emp={
+    id:empId, name:first+' '+last, email, phone, pw,
+    deptId, companyId:dept.companyId,
+    pos:pos||'Employee', joinDate:todayStr,
+    profileDone:false, faceEnrolled:true,
+    facePhoto:regFaceBase64,
+    faceDescriptor:regFaceDescriptor,   // 128-float biometric array
+    createdAt:new Date().toISOString()
+  };
+  d.employees.push(emp);
+  saveDB(d);
+  showMsg(ok,`Welcome, ${first}! Your ID is ${empId} — signing you in…`,'ok');
+  setTimeout(()=>{
+    sessionStorage.setItem('at_session',JSON.stringify({role:'employee',id:empId,name:emp.name,deptId,companyId:dept.companyId,profileDone:false}));
+    location.href='employee.html';
+  },1600);
+}
+
+function p(n){return String(n).padStart(2,'0');}
+function showMsg(el,msg,type){el.textContent=msg;el.style.display='block';if(type!=='ok')setTimeout(()=>el.style.display='none',4500);}
+</script>
+</body>
+</html>

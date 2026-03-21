@@ -1,0 +1,1335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Employee — AttendTrack</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    :root{
+      --white:#fff;--off:#f7f7f5;--off2:#efefec;--border:#e4e4e0;
+      --text:#1a1a1a;--muted:#888880;--light:#c8c8c2;
+      --accent:#2c5f2e;--abg:#e8f0e8;--aborder:#b8d4b8;
+      --red:#c0392b;--rebg:#fdf0ef;--reborder:#e8b4b4;
+      --amber:#b7791f;--ambg:#fef9ec;--amborder:#e8d4a4;
+      --green-glow:rgba(44,95,46,.12);
+    }
+    body{font-family:'DM Sans',sans-serif;background:var(--off);color:var(--text);min-height:100vh}
+
+    /* ══ PROFILE-ONLY ══ */
+    .profile-only{display:none;min-height:100vh;align-items:center;justify-content:center;padding:20px;flex-direction:column}
+    .profile-only.show{display:flex}
+    .po-card{background:var(--white);border:1px solid var(--border);border-radius:8px;width:100%;max-width:480px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.07)}
+    .po-head{background:var(--accent);padding:24px 28px;color:#fff}
+    .po-head h2{font-size:17px;font-weight:700;margin-bottom:4px}
+    .po-head p{font-size:12px;color:rgba(255,255,255,.6)}
+    .po-body{padding:22px 26px}
+    .po-user{display:flex;align-items:center;gap:14px;padding:14px;background:var(--off);border-radius:6px;border:1px solid var(--border);margin-bottom:18px}
+    .po-av{width:46px;height:46px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;flex-shrink:0;overflow:hidden}
+    .po-av img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+    .po-n{font-size:14px;font-weight:700}.po-sub{font-size:11px;color:var(--muted);margin-top:2px}
+    .field{margin-bottom:11px}
+    .field label{display:block;font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+    .field input,.field select{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:5px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;color:var(--text);background:var(--white);outline:none;transition:border-color .15s}
+    .field input:focus{border-color:var(--accent)}
+    .field input::placeholder{color:var(--light);font-weight:400}
+    .g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .btn-main{width:100%;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:5px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;cursor:pointer;transition:background .15s;margin-top:4px}
+    .btn-main:hover{background:#234d25}
+    .err-msg{font-size:11px;color:var(--red);padding:9px 12px;background:var(--rebg);border-left:3px solid var(--red);border-radius:4px;margin-bottom:11px;display:none;font-weight:600}
+    .ok-msg{font-size:11px;color:var(--accent);padding:9px 12px;background:var(--abg);border-left:3px solid var(--accent);border-radius:4px;margin-bottom:11px;display:none;font-weight:600}
+    .po-notice{background:var(--abg);border:1px solid var(--aborder);border-radius:5px;padding:12px;font-size:12px;color:var(--accent);font-weight:600;margin-bottom:14px;line-height:1.6}
+    .po-notice span{display:block;font-size:11px;color:var(--muted);font-weight:400;margin-top:4px}
+    .dept-pending{background:var(--off);border:1px solid var(--border);border-radius:5px;padding:16px;text-align:center;margin-top:10px}
+    .dept-pending h3{font-size:13px;font-weight:700;margin-bottom:8px}
+    .dept-pending p{font-size:12px;color:var(--muted);line-height:1.6}
+
+    /* ══ DASHBOARD ══ */
+    .dashboard-wrap{display:none}.dashboard-wrap.show{display:block}
+    .nav{background:var(--white);border-bottom:1px solid var(--border);padding:0 28px;display:flex;align-items:center;height:54px;position:sticky;top:0;z-index:20;gap:18px}
+    .nav-brand{font-size:11px;font-weight:700;color:var(--muted);margin-right:auto;font-family:'DM Mono',monospace}
+    .nav-company{font-size:13px;font-weight:700}
+    .nav-tab{font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;padding:4px 0;border-bottom:2px solid transparent;transition:all .12s;border:none;background:none;font-family:'DM Sans',sans-serif}
+    .nav-tab:hover{color:var(--text)}.nav-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+    .nav-user{display:flex;align-items:center;gap:9px;margin-left:auto}
+    .nav-av{width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;overflow:hidden;flex-shrink:0}
+    .nav-av img{width:100%;height:100%;object-fit:cover}
+    .nav-n{font-size:12px;font-weight:700}.nav-s{font-size:10px;color:var(--muted)}
+    .btn-lo{font-size:11px;color:var(--muted);font-weight:700;cursor:pointer;padding:6px 11px;border:1px solid var(--border);border-radius:4px;background:none;font-family:'DM Sans',sans-serif;transition:all .12s}
+    .btn-lo:hover{border-color:var(--red);color:var(--red)}
+    .page{max-width:920px;margin:0 auto;padding:24px 20px}
+    .sec{display:none}.sec.on{display:block}
+    .pg-h{margin-bottom:20px}.pg-h h1{font-size:19px;font-weight:700}.pg-h p{font-size:11px;color:var(--muted);margin-top:3px}
+
+    /* Status bar */
+    .sbar{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-radius:6px;margin-bottom:18px;border:1px solid;flex-wrap:wrap;gap:10px}
+    .sbar.out{background:var(--white);border-color:var(--border)}
+    .sbar.in{background:var(--abg);border-color:var(--aborder)}
+    .sbar.done{background:var(--off2);border-color:var(--border)}
+    .sb-l{display:flex;align-items:center;gap:12px}
+    .sb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+    .sb-dot.r{background:var(--red)}.sb-dot.g{background:var(--accent);animation:blink 2s infinite}.sb-dot.gr{background:var(--light)}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+    .sb-st{font-size:13px;font-weight:700}.sb-sub{font-size:11px;color:var(--muted);margin-top:2px}
+    .sb-clk{font-size:19px;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums;font-family:'DM Mono',monospace}
+
+    /* Stats */
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+    .stat{background:var(--white);border:1px solid var(--border);border-radius:6px;padding:16px}
+    .stat-n{font-size:24px;font-weight:700;margin-bottom:4px;font-family:'DM Mono',monospace}
+    .stat-n.g{color:var(--accent)}.stat-n.r{color:var(--red)}.stat-n.a{color:var(--amber)}
+    .stat-l{font-size:9px;color:var(--muted);font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+
+    /* Grid */
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
+
+    /* Card */
+    .card{background:var(--white);border:1px solid var(--border);border-radius:6px}
+    .card-h{padding:13px 17px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+    .card-h h3{font-size:12px;font-weight:700}
+    .card-b{padding:16px}
+    .btn{padding:8px 14px;border-radius:4px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:700;cursor:pointer;border:1px solid var(--border);transition:all .12s;background:transparent;color:var(--muted)}
+    .btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+    .btn:disabled{opacity:.35;cursor:not-allowed}
+    .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .btn.primary:hover:not(:disabled){background:#234d25;color:#fff}
+    .btn.danger{background:var(--red);color:#fff;border-color:var(--red)}
+    .btn.danger:hover:not(:disabled){background:#a93226;color:#fff}
+    .btn.done-look{background:var(--off2);color:var(--light);border-color:var(--border);cursor:default}
+
+    /* Calendar */
+    .cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .cal-m{font-size:12px;font-weight:700}
+    .cal-btn{background:none;border:1px solid var(--border);padding:3px 9px;border-radius:3px;cursor:pointer;font-size:11px;color:var(--muted);font-family:'DM Sans',sans-serif}
+    .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+    .cal-dn{text-align:center;font-size:9px;font-weight:700;color:var(--light);letter-spacing:.4px;text-transform:uppercase;padding:3px 0}
+    .cal-cell{aspect-ratio:1;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500}
+    .cal-cell.future{background:var(--white);color:var(--light);border:1px solid transparent}
+    .cal-cell.empty{visibility:hidden}
+    .cal-cell.present{background:var(--abg);color:var(--accent);font-weight:700;border:1px solid var(--aborder)}
+    .cal-cell.late{background:var(--ambg);color:var(--amber);font-weight:700;border:1px solid var(--amborder)}
+    .cal-cell.absent{background:var(--rebg);color:var(--red);border:1px solid var(--reborder)}
+    .cal-cell.today{outline:2px solid var(--accent);outline-offset:1px;font-weight:700}
+    .cal-cell.weekend{background:var(--off2);color:var(--light)}
+    .cal-cell.no-data{background:var(--off);color:var(--light)}
+    .cal-leg{display:flex;gap:10px;margin-top:8px;flex-wrap:wrap}
+    .cl{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted);font-weight:600}
+    .cld{width:7px;height:7px;border-radius:1px;border:1px solid}
+
+    /* ══ MARK ATTENDANCE SECTION ══ */
+    .time-boxes{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:14px}
+    .tb{background:var(--off);border:1px solid var(--border);border-radius:5px;padding:12px;text-align:center}
+    .tb.filled{background:var(--abg);border-color:var(--aborder)}
+    .tb-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:5px}
+    .tb-val{font-size:18px;font-weight:700;color:var(--light);font-family:'DM Mono',monospace}
+    .tb-val.set{color:var(--accent)}
+    .alert{padding:10px 13px;border-radius:4px;font-size:11px;font-weight:700;margin-bottom:12px;border-left:3px solid;display:none}
+    .alert.ok{background:var(--abg);border-color:var(--accent);color:var(--accent)}
+    .alert.err{background:var(--rebg);border-color:var(--red);color:var(--red)}
+
+    /* ── Camera block ── */
+    .cam-card{background:var(--white);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+    .cam-card-h{padding:13px 17px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+    .cam-card-h h3{font-size:12px;font-weight:700}
+    .score-badge{font-size:11px;font-weight:700;color:var(--muted);font-family:'DM Mono',monospace}
+    .score-badge.ok{color:var(--accent)}
+
+    .cam-wrap{position:relative;background:#0a0a0a;aspect-ratio:4/3;overflow:hidden}
+    .cam-wrap video{width:100%;height:100%;object-fit:cover;display:block;transform:scaleX(-1)}
+
+    /* Inactive overlay */
+    .cam-ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#111}
+    .cam-ov .ico{font-size:30px;opacity:.3}
+    .cam-ov p{font-size:11px;color:#666;text-align:center;line-height:1.6}
+    .cam-ov a{color:var(--accent);font-weight:700}
+
+    /* Face oval guide */
+    .face-oval{position:absolute;top:50%;left:50%;transform:translate(-50%,-53%);width:100px;height:130px;border-radius:50%;border:1.5px dashed rgba(44,95,46,.5);pointer-events:none;transition:all .3s}
+    .face-oval.good{border-color:#3ddc84;border-style:solid;box-shadow:0 0 18px rgba(61,220,132,.25),inset 0 0 18px rgba(61,220,132,.05)}
+
+    /* Corner brackets */
+    .brk{position:absolute;width:14px;height:14px;pointer-events:none}
+    .brk.tl{top:8px;left:8px;border-top:2px solid var(--accent);border-left:2px solid var(--accent)}
+    .brk.tr{top:8px;right:8px;border-top:2px solid var(--accent);border-right:2px solid var(--accent)}
+    .brk.bl{bottom:8px;left:8px;border-bottom:2px solid var(--accent);border-left:2px solid var(--accent)}
+    .brk.br{bottom:8px;right:8px;border-bottom:2px solid var(--accent);border-right:2px solid var(--accent)}
+
+    /* Scan line */
+    .scan-line{position:absolute;left:0;right:0;height:1.5px;background:linear-gradient(90deg,transparent,var(--accent),transparent);display:none;animation:scandown 2.5s ease-in-out infinite}
+    @keyframes scandown{0%{top:5%;opacity:0}10%{opacity:1}90%{opacity:1}100%{top:95%;opacity:0}}
+    .cam-wrap.scanning .scan-line{display:block}
+
+    /* Full-screen verification overlay */
+    .verify-ov{position:absolute;inset:0;background:rgba(10,20,12,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;opacity:0;pointer-events:none;transition:opacity .35s;z-index:10}
+    .verify-ov.show{opacity:1;pointer-events:all}
+
+    /* Spinning ring */
+    .vring{width:80px;height:80px;border-radius:50%;border:2px solid rgba(255,255,255,.08);position:relative;display:flex;align-items:center;justify-content:center}
+    .vring::before{content:'';position:absolute;inset:0;border-radius:50%;border:2px solid transparent;border-top-color:#3ddc84;animation:vspin 1s linear infinite;transition:opacity .3s}
+    @keyframes vspin{to{transform:rotate(360deg)}}
+    .vring.done::before{display:none}
+    .vring.fail::before{display:none;border-top-color:var(--red)}
+    .vring-icon{font-size:32px;display:none}
+    .vring.done .vring-icon,.vring.fail .vring-icon{display:block}
+    .vring.done{border-color:rgba(61,220,132,.3);box-shadow:0 0 24px rgba(61,220,132,.2)}
+    .vring.fail{border-color:rgba(255,77,77,.3);box-shadow:0 0 24px rgba(255,77,77,.2)}
+
+    .verify-phases{display:flex;flex-direction:column;align-items:center;gap:4px}
+    .verify-label{font-size:12px;font-weight:600;color:#fff;letter-spacing:.3px}
+    .verify-sub{font-size:10px;color:#3ddc84;font-family:'DM Mono',monospace;opacity:.8}
+    .verify-score{font-family:'DM Mono',monospace;font-size:28px;font-weight:500;color:#3ddc84;display:none}
+    .verify-score.fail{color:var(--red)}
+
+    /* Cam bottom bar */
+    .cam-bar{padding:9px 13px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border)}
+    .cam-bar-l{font-size:10px;color:var(--muted);font-weight:500}
+    .cam-bar-l span{color:var(--accent);font-weight:700}
+    .cam-btns{display:flex;gap:6px}
+    .cbtn{padding:7px 13px;border:1px solid var(--border);border-radius:4px;background:transparent;font-family:'DM Sans',sans-serif;font-size:10px;font-weight:700;color:var(--muted);cursor:pointer;transition:all .12s}
+    .cbtn:hover{border-color:var(--accent);color:var(--accent)}
+    .cbtn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .cbtn:disabled{opacity:.3;cursor:not-allowed}
+
+    /* Captured thumb */
+    .snap-prev{padding:10px 13px;border-top:1px solid var(--border);display:none;align-items:center;gap:12px}
+    .snap-prev.show{display:flex}
+    .snap-thumb{width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid var(--accent)}
+    .snap-meta{font-size:11px;color:var(--muted)}
+    .snap-meta strong{display:block;font-size:13px;font-weight:700;color:var(--accent);font-family:'DM Mono',monospace;margin-bottom:2px}
+
+    /* ── GPS block ── */
+    .gps-card{background:var(--white);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+    .gps-card-h{padding:13px 17px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+    .gps-card-h h3{font-size:12px;font-weight:700}
+    .gps-status{display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;color:var(--muted)}
+    .gps-led{width:6px;height:6px;border-radius:50%;background:var(--light)}
+    .gps-led.live{background:var(--accent);animation:blink 1.5s infinite}
+
+    /* Map embed */
+    .map-frame{width:100%;height:130px;background:#e8ede8;border-bottom:1px solid var(--border);position:relative;overflow:hidden}
+    .map-placeholder{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:linear-gradient(135deg,#e8ede8,#d4dfd4)}
+    .map-placeholder .mico{font-size:22px;opacity:.5}
+    .map-placeholder p{font-size:10px;color:var(--muted);font-weight:600}
+    .map-coords{font-family:'DM Mono',monospace;font-size:11px;color:var(--accent);font-weight:500;margin-top:3px}
+
+    /* GPS info row */
+    .gps-info{padding:12px 14px;border-bottom:1px solid var(--border)}
+    .gps-coords{font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:var(--text);margin-bottom:3px}
+    .gps-addr{font-size:11px;color:var(--muted);font-weight:500}
+    .gps-acc{font-size:10px;color:var(--accent);font-weight:700;margin-top:4px}
+
+    /* Work type */
+    .wt-row{display:flex;gap:5px;padding:10px 14px;border-bottom:1px solid var(--border)}
+    .wt{flex:1;padding:7px 4px;text-align:center;border:1px solid var(--border);border-radius:4px;font-size:10px;font-weight:700;color:var(--muted);cursor:pointer;background:var(--white);transition:all .12s}
+    .wt.sel{border-color:var(--accent);color:var(--accent);background:var(--abg)}
+
+    /* Checklist */
+    .chk-list{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:5px}
+    .chk-item{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;color:var(--muted);padding:5px 8px;border-radius:4px;transition:all .2s}
+    .chk-item.done{background:var(--abg);color:var(--accent)}
+    .chk-mark{font-size:12px;flex-shrink:0;width:16px;text-align:center}
+
+    /* Submit buttons */
+    .submit-row{padding:12px 14px;display:flex;gap:8px}
+
+    /* ── GPS loading overlay ── */
+    .gps-loading{display:none;position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.5);align-items:center;justify-content:center}
+    .gps-loading.show{display:flex}
+    .gps-modal{background:var(--white);border-radius:10px;padding:28px 32px;text-align:center;width:280px;box-shadow:0 8px 32px rgba(0,0,0,.2)}
+    .gps-spin{width:48px;height:48px;border-radius:50%;border:3px solid var(--border);border-top-color:var(--accent);animation:vspin 1s linear infinite;margin:0 auto 14px}
+    .gps-modal h4{font-size:14px;font-weight:700;margin-bottom:5px}
+    .gps-modal p{font-size:11px;color:var(--muted);line-height:1.6}
+    .gps-modal .gps-phase{font-size:10px;color:var(--accent);font-weight:700;margin-top:8px;font-family:'DM Mono',monospace}
+
+    /* History table */
+    .tw{overflow-x:auto}
+    table{width:100%;border-collapse:collapse}
+    thead th{padding:9px 12px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);background:var(--off);border-bottom:1px solid var(--border)}
+    tbody tr{border-bottom:1px solid var(--off)}
+    tbody tr:last-child{border-bottom:none}
+    tbody tr:hover{background:var(--off)}
+    tbody td{padding:10px 12px;font-size:12px;font-weight:500}
+    .badge{padding:3px 8px;border-radius:3px;font-size:10px;font-weight:700}
+    .badge.present{background:var(--abg);color:var(--accent)}
+    .badge.absent{background:var(--rebg);color:var(--red)}
+    .badge.late{background:var(--ambg);color:var(--amber)}
+    .badge.wfh{background:var(--off2);color:var(--muted)}
+
+    /* Profile */
+    .prof-grid{display:grid;grid-template-columns:180px 1fr;gap:14px}
+    .prof-av-big{width:70px;height:70px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;margin:0 auto 12px;overflow:hidden}
+    .prof-av-big img{width:100%;height:100%;object-fit:cover}
+    .prof-n{font-size:14px;font-weight:700;text-align:center}
+    .prof-p{font-size:11px;color:var(--accent);font-weight:700;text-align:center;margin:3px 0}
+    .prof-id{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;text-align:center;background:var(--off);padding:3px 10px;border-radius:3px;border:1px solid var(--border);display:inline-block;margin-top:4px}
+    .face-tag{margin:11px auto 0;background:var(--abg);border:1px solid var(--aborder);border-radius:3px;padding:5px 10px;font-size:10px;font-weight:700;color:var(--accent);text-align:center}
+    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .ii{padding:10px;background:var(--off);border-radius:4px;border:1px solid var(--border)}
+    .ii-l{font-size:9px;font-weight:700;color:var(--light);letter-spacing:.8px;text-transform:uppercase;margin-bottom:4px}
+    .ii-v{font-size:12px;font-weight:700}
+    .ms-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+    .ms-i{text-align:center;padding:10px;background:var(--off);border-radius:4px}
+    .ms-n{font-size:18px;font-weight:700;font-family:'DM Mono',monospace}
+    .ms-n.g{color:var(--accent)}.ms-n.r{color:var(--red)}.ms-n.a{color:var(--amber)}
+    .ms-l{font-size:9px;color:var(--muted);font-weight:700;margin-top:2px;text-transform:uppercase;letter-spacing:.4px}
+
+    @media(max-width:680px){.grid2{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}.nav{padding:0 14px;gap:14px}.page{padding:16px 14px}.prof-grid{grid-template-columns:1fr}}
+    @media(max-width:440px){.nav-tab{display:none}}
+  </style>
+</head>
+<body>
+
+<!-- ══ GPS LOADING MODAL ══ -->
+<div class="gps-loading" id="gpsLoadingModal">
+  <div class="gps-modal">
+    <div class="gps-spin"></div>
+    <h4>Getting Your Location</h4>
+    <p>If your browser asks for location permission, click <strong>Allow</strong>.</p>
+    <div class="gps-phase" id="gpsPhase">Requesting location permission…</div>
+  </div>
+</div>
+
+<!-- ══ PROFILE-ONLY SCREEN ══ -->
+<div class="profile-only" id="profileOnly">
+  <div class="po-card">
+    <div class="po-head">
+      <h2>Welcome to AttendTrack</h2>
+      <p>Complete your profile to access your dashboard.</p>
+    </div>
+    <div class="po-body">
+      <div class="po-user">
+        <div class="po-av" id="poAv">?</div>
+        <div><div class="po-n" id="poName">Loading…</div><div class="po-sub" id="poEmail">—</div></div>
+      </div>
+      <div id="hasDeptBlock" style="display:none">
+        <div class="po-notice">✓ You are registered with a department.<span id="poCoInfo"></span></div>
+        <div class="err-msg" id="profErr"></div>
+        <div class="ok-msg" id="profOk"></div>
+        <div class="g2">
+          <div class="field"><label>Phone</label><input id="profPhone" placeholder="+91 98765 43210"/></div>
+          <div class="field"><label>Position</label><input id="profPos" readonly style="background:var(--off);color:var(--muted)"/></div>
+        </div>
+        <div class="field"><label>Address</label><input id="profAddr" placeholder="New Delhi, India"/></div>
+        <button class="btn-main" onclick="saveProfile()">Save & Go to Dashboard</button>
+      </div>
+      <div id="noDeptBlock">
+        <div class="dept-pending">
+          <h3>Waiting for Department Invite</h3>
+          <p>Ask your Admin to share your department's join link.</p>
+          <div style="margin-top:14px;font-size:11px;color:var(--muted);font-weight:600">Your Employee ID:</div>
+          <div style="font-family:'DM Mono',monospace;font-size:14px;font-weight:700;color:var(--accent);margin-top:4px" id="poEmpId">—</div>
+        </div>
+        <button class="btn-main" style="margin-top:12px;background:transparent;color:var(--accent);border:1px solid var(--accent)" onclick="logout()">Sign Out</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ FULL DASHBOARD ══ -->
+<div class="dashboard-wrap" id="dashWrap">
+  <nav class="nav">
+    <div class="nav-brand" id="navCompany">AttendTrack</div>
+    <button class="nav-tab active" onclick="tab('home',this)">Home</button>
+    <button class="nav-tab" onclick="tab('mark',this)">Mark Attendance</button>
+    <button class="nav-tab" onclick="tab('history',this)">History</button>
+    <button class="nav-tab" onclick="tab('profile',this)">Profile</button>
+    <div class="nav-user">
+      <div class="nav-av" id="navAv">?</div>
+      <div><div class="nav-n" id="navName">—</div><div class="nav-s" id="navDept">—</div></div>
+    </div>
+    <button class="btn-lo" onclick="logout()">Sign Out</button>
+  </nav>
+
+  <div class="page">
+
+    <!-- HOME -->
+    <div class="sec on" id="tab-home">
+      <div class="pg-h"><h1 id="greeting">Good morning</h1><p id="homeDate"></p></div>
+      <div class="sbar out" id="sbar">
+        <div class="sb-l"><div class="sb-dot r" id="sbDot"></div><div><div class="sb-st" id="sbSt">Not Checked In</div><div class="sb-sub" id="sbSub">Office: 9:00 AM – 6:00 PM</div></div></div>
+        <div class="sb-clk" id="clk"></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="stat-n g" id="sp">—</div><div class="stat-l">Present</div></div>
+        <div class="stat"><div class="stat-n a" id="sl">—</div><div class="stat-l">Late</div></div>
+        <div class="stat"><div class="stat-n r" id="sa">—</div><div class="stat-l">Absent</div></div>
+        <div class="stat"><div class="stat-n g" id="sr">—</div><div class="stat-l">Rate</div></div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <div class="card-h">
+            <h3 id="calTitle"></h3>
+            <div style="display:flex;gap:5px">
+              <button class="cal-btn" onclick="prevM()">‹</button>
+              <button class="cal-btn" onclick="nextM()">›</button>
+            </div>
+          </div>
+          <div class="card-b">
+            <div class="cal-grid" id="calGrid"></div>
+            <div class="cal-leg" style="margin-top:9px">
+              <div class="cl"><div class="cld" style="background:var(--abg);border-color:var(--aborder)"></div>Present</div>
+              <div class="cl"><div class="cld" style="background:var(--ambg);border-color:var(--amborder)"></div>Late</div>
+              <div class="cl"><div class="cld" style="background:var(--rebg);border-color:var(--reborder)"></div>Absent</div>
+              <div class="cl"><div class="cld" style="background:var(--off2);border-color:var(--border)"></div>Weekend</div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h3>Today</h3></div>
+          <div class="card-b" id="todayBox"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MARK ATTENDANCE -->
+    <div class="sec" id="tab-mark">
+      <div class="pg-h"><h1>Mark Attendance</h1><p>Capture face + GPS to check in or out</p></div>
+      <div class="alert" id="markAlert"></div>
+      <div class="time-boxes">
+        <div class="tb" id="inBox"><div class="tb-lbl">Check In</div><div class="tb-val" id="inVal">—</div></div>
+        <div class="tb" id="outBox"><div class="tb-lbl">Check Out</div><div class="tb-val" id="outVal">—</div></div>
+      </div>
+
+      <div class="grid2">
+        <!-- FACE CAMERA CARD -->
+        <div class="cam-card">
+          <div class="cam-card-h">
+            <h3>Face Verification</h3>
+            <span class="score-badge" id="scoreLabel">Not verified</span>
+          </div>
+
+          <div class="cam-wrap" id="camWrap">
+            <video id="vid" autoplay muted playsinline></video>
+            <canvas id="cvs" style="display:none"></canvas>
+
+            <div class="face-oval" id="faceOval"></div>
+            <div class="brk tl"></div><div class="brk tr"></div>
+            <div class="brk bl"></div><div class="brk br"></div>
+            <div class="scan-line"></div>
+
+            <!-- Inactive overlay -->
+            <div class="cam-ov" id="camOv">
+              <div class="ico">📷</div>
+              <p>Click <a onclick="startCam()" style="cursor:pointer">Start Camera</a><br>to begin verification</p>
+            </div>
+
+            <!-- Full verification overlay -->
+            <div class="verify-ov" id="verifyOv">
+              <div class="vring" id="vring">
+                <span class="vring-icon" id="vringIcon"></span>
+              </div>
+              <div class="verify-phases">
+                <div class="verify-label" id="verifyLabel">Preparing…</div>
+                <div class="verify-sub" id="verifySub"></div>
+              </div>
+              <div class="verify-score" id="verifyScore"></div>
+            </div>
+          </div>
+
+          <!-- Camera bar -->
+          <div class="cam-bar">
+            <div class="cam-bar-l" id="camBarL">Camera inactive</div>
+            <div class="cam-btns">
+              <button class="cbtn" id="btnCam" onclick="startCam()">Start Camera</button>
+              <button class="cbtn primary" id="btnSnap" onclick="snapAndVerify()" disabled>Capture & Verify</button>
+            </div>
+          </div>
+
+          <!-- Captured snap preview -->
+          <div class="snap-prev" id="snapPrev">
+            <img id="snapThumb" class="snap-thumb" src="" alt="">
+            <div class="snap-meta">
+              <strong id="snapScore">—</strong>
+              Face match score
+            </div>
+          </div>
+        </div>
+
+        <!-- GPS + SUBMIT CARD -->
+        <div class="gps-card">
+          <div class="gps-card-h">
+            <h3>GPS Location</h3>
+            <div class="gps-status">
+              <div class="gps-led" id="gpsLed"></div>
+              <span id="gpsStatusTxt">Not captured</span>
+            </div>
+          </div>
+
+          <!-- Map frame -->
+          <div class="map-frame" id="mapFrame">
+            <div class="map-placeholder" id="mapPlaceholder">
+              <div class="mico">🗺</div>
+              <p>Location will appear here</p>
+              <div class="map-coords" id="mapCoordsPlaceholder"></div>
+            </div>
+          </div>
+
+          <!-- GPS info -->
+          <div class="gps-info">
+            <div class="gps-coords" id="gpsCoords">Press "Get My Location" below</div>
+            <div class="gps-addr" id="gpsAddr">—</div>
+            <div class="gps-acc" id="gpsAcc" style="display:none"></div>
+          </div>
+
+          <!-- GPS button -->
+          <div style="padding:0 14px 10px">
+            <button class="btn" style="width:100%" id="btnGps" onclick="getGPS()">📍 Get My Location</button>
+          </div>
+
+          <!-- Work type -->
+          <div style="padding:0 14px 6px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Work Type</div>
+          <div class="wt-row">
+            <div class="wt sel" id="wt-office" onclick="selWT('office')">Office</div>
+            <div class="wt" id="wt-wfh" onclick="selWT('wfh')">WFH</div>
+            <div class="wt" id="wt-field" onclick="selWT('field')">Field</div>
+          </div>
+
+          <!-- Checklist -->
+          <div class="chk-list">
+            <div class="chk-item" id="ck1"><span class="chk-mark">○</span>Selfie captured</div>
+            <div class="chk-item" id="ck2"><span class="chk-mark">○</span>GPS obtained</div>
+            <div class="chk-item" id="ck3"><span class="chk-mark">○</span>Face verified</div>
+          </div>
+
+          <!-- Submit -->
+          <div class="submit-row">
+            <button class="btn primary" id="btnIn" onclick="markAtt('in')" disabled style="flex:1">Check In</button>
+            <button class="btn danger"  id="btnOut" onclick="markAtt('out')" disabled style="flex:1">Check Out</button>
+          </div>
+          <p style="text-align:center;font-size:10px;color:var(--muted);padding-bottom:12px">All 3 steps required</p>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- HISTORY -->
+    <div class="sec" id="tab-history">
+      <div class="pg-h"><h1>History</h1><p>Your attendance records</p></div>
+      <div class="card">
+        <div class="card-h">
+          <h3>Records</h3>
+          <select id="histSel" onchange="renderHistory()" style="padding:7px 10px;border:1px solid var(--border);border-radius:4px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:var(--muted);outline:none"></select>
+        </div>
+        <div class="card-b" style="padding:0 17px" id="histWrap"></div>
+      </div>
+    </div>
+
+    <!-- PROFILE -->
+    <div class="sec" id="tab-profile">
+      <div class="pg-h">
+        <h1>Profile</h1>
+        <p>Your personal details and account settings</p>
+      </div>
+      <div class="prof-grid">
+        <!-- Left card: avatar + face tag -->
+        <div class="card">
+          <div class="card-b" style="text-align:center">
+            <div class="prof-av-big" id="profAvB">?</div>
+            <div class="prof-n" id="profNm">—</div>
+            <div class="prof-p" id="profPs">—</div>
+            <div style="margin-top:4px"><div class="prof-id" id="profId2">—</div></div>
+            <div class="face-tag" id="faceTag">○ No face enrolled</div>
+          </div>
+        </div>
+
+        <!-- Right card: details + edit + stats -->
+        <div>
+          <!-- Read-only details -->
+          <div class="card" style="margin-bottom:14px">
+            <div class="card-h">
+              <h3>Details</h3>
+              <button class="btn sm" id="btnEditProf" onclick="toggleEditProfile()">✏ Edit</button>
+            </div>
+            <div class="card-b">
+              <!-- View mode -->
+              <div id="profViewMode">
+                <div class="info-grid" id="infoGrid"></div>
+              </div>
+              <!-- Edit mode -->
+              <div id="profEditMode" style="display:none">
+                <div class="err-msg" id="profEditErr"></div>
+                <div class="ok-msg"  id="profEditOk"></div>
+                <div class="g2" style="margin-bottom:10px">
+                  <div class="field"><label>Phone</label><input id="editPhone" placeholder="+91 98765 43210"/></div>
+                  <div class="field"><label>Position / Role</label><input id="editPos" placeholder="Software Engineer"/></div>
+                </div>
+                <div class="field"><label>Address</label><input id="editAddr" placeholder="New Delhi, India"/></div>
+                <div style="display:flex;gap:8px;margin-top:4px">
+                  <button class="btn primary" style="flex:1" onclick="saveProfileEdit()">Save Changes</button>
+                  <button class="btn" style="flex:1" onclick="toggleEditProfile()">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Change password -->
+          <div class="card" style="margin-bottom:14px">
+            <div class="card-h">
+              <h3>Change Password</h3>
+              <button class="btn sm" onclick="togglePwChange()">🔑 Change</button>
+            </div>
+            <div id="pwChangeForm" style="display:none;padding:14px 17px">
+              <div class="err-msg" id="pwErr"></div>
+              <div class="ok-msg"  id="pwOk"></div>
+              <div class="field"><label>Current Password</label><input type="password" id="oldPw" placeholder="Current password"/></div>
+              <div class="field"><label>New Password</label><input type="password" id="newPw" placeholder="Min 6 characters"/></div>
+              <div class="field"><label>Confirm New Password</label><input type="password" id="newPw2" placeholder="Repeat new password"/></div>
+              <div style="display:flex;gap:8px">
+                <button class="btn primary" style="flex:1" onclick="saveNewPassword()">Update Password</button>
+                <button class="btn" style="flex:1" onclick="togglePwChange()">Cancel</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Monthly stats -->
+          <div class="card">
+            <div class="card-h"><h3>This Month</h3></div>
+            <div class="card-b">
+              <div class="ms-row" id="msRow"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- face-api.js — real neural network face recognition -->
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<script>
+const DB_KEY='at_db';
+function db(){try{return JSON.parse(localStorage.getItem(DB_KEY))||{}}catch(e){return{}}}
+function save(d){localStorage.setItem(DB_KEY,JSON.stringify(d))}
+
+const sess=JSON.parse(sessionStorage.getItem('at_session')||'null');
+if(!sess||sess.role!=='employee'){location.href='index.html';}
+
+let me=null;
+let calY=new Date().getFullYear(), calM=new Date().getMonth();
+let snapDone=false, gpsDone=false, faceDone=false, wt='office', stream=null;
+let capturedLat=null, capturedLng=null, capturedAcc=null;
+let faceMatchScore=0;
+
+// ── face-api.js models ──
+const MODEL_URL='https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model';
+let faceApiReady=false;
+async function loadFaceModels(){
+  try{
+    await Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+      faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+      faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+    ]);
+    faceApiReady=true;
+    console.log('✅ face-api.js ready');
+  } catch(e){ faceApiReady=false; console.warn('face-api load failed:',e.message); }
+}
+loadFaceModels();
+
+// ── Clock ──
+function tick(){const el=document.getElementById('clk');if(el)el.textContent=new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
+setInterval(tick,1000);tick();
+
+document.addEventListener('DOMContentLoaded',()=>{
+  const d=db();
+  me=(d.employees||[]).find(e=>e.id===sess.id);
+  if(!me){logout();return;}
+
+  // Show face photo in nav avatar if enrolled
+  if(me.facePhoto){
+    setAvatarPhoto('navAv',me.facePhoto);
+    setAvatarPhoto('poAv',me.facePhoto);
+  }
+
+  if(me.deptId){
+    if(!me.profileDone) showProfileOnly(d);
+    else showDashboard(d);
+  } else showProfileOnly(d);
+});
+
+function setAvatarPhoto(id,src){
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.innerHTML=`<img src="${src}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+}
+
+// ══ PROFILE SETUP ══
+function showProfileOnly(d){
+  document.getElementById('profileOnly').classList.add('show');
+  if(me.facePhoto) setAvatarPhoto('poAv',me.facePhoto);
+  else document.getElementById('poAv').textContent=initials(me.name);
+  document.getElementById('poName').textContent=me.name;
+  document.getElementById('poEmail').textContent=me.email;
+  document.getElementById('poEmpId').textContent=me.id;
+  if(me.deptId){
+    const dept=(d.departments||[]).find(x=>x.id===me.deptId);
+    const co=(d.companies||[]).find(x=>x.id===me.companyId);
+    document.getElementById('hasDeptBlock').style.display='block';
+    document.getElementById('noDeptBlock').style.display='none';
+    document.getElementById('poCoInfo').textContent=`${co?.name||'Your Company'} — ${dept?.name||'Department'}`;
+    document.getElementById('profPos').value=me.pos||'';
+    document.getElementById('profPhone').value=me.phone||'';
+  } else {
+    document.getElementById('hasDeptBlock').style.display='none';
+    document.getElementById('noDeptBlock').style.display='block';
+  }
+}
+function saveProfile(){
+  const phone=document.getElementById('profPhone').value.trim();
+  const addr=document.getElementById('profAddr').value.trim();
+  const ok=document.getElementById('profOk');
+  const d=db();
+  const emp=d.employees.find(e=>e.id===me.id);
+  if(!emp)return;
+  if(phone)emp.phone=phone;
+  if(addr)emp.address=addr;
+  emp.profileDone=true; me=emp; save(d);
+  ok.textContent='Profile saved! Loading dashboard…'; ok.style.display='block';
+  setTimeout(()=>{document.getElementById('profileOnly').classList.remove('show');showDashboard(d);},1200);
+}
+
+// ══ DASHBOARD SETUP ══
+function showDashboard(d){
+  const dept=(d.departments||[]).find(x=>x.id===me.deptId);
+  const co=(d.companies||[]).find(x=>x.id===me.companyId);
+  document.getElementById('dashWrap').classList.add('show');
+  if(me.facePhoto) setAvatarPhoto('navAv',me.facePhoto);
+  else document.getElementById('navAv').textContent=initials(me.name);
+  document.getElementById('navName').textContent=me.name;
+  document.getElementById('navDept').textContent=dept?.name||'—';
+  document.getElementById('navCompany').textContent=co?.name||'AttendTrack';
+  document.getElementById('greeting').textContent=greet()+', '+me.name.split(' ')[0];
+  document.getElementById('homeDate').textContent=new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  renderHome(); populateHistSel(); renderHistory(); renderProfile(); loadTodayTimes();
+  const todayRec=myAtt().find(a=>a.date===today());
+  if(todayRec?.checkIn&&todayRec?.checkOut) setSbar('done',todayRec.checkIn,todayRec.checkOut);
+  else if(todayRec?.checkIn) setSbar('in',todayRec.checkIn);
+}
+
+function tab(name,el){
+  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('on'));
+  document.getElementById('tab-'+name).classList.add('on');
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  if(el)el.classList.add('active');
+  if(name==='history')renderHistory();
+  if(name==='profile')renderProfile();
+  if(name!=='mark'&&stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+}
+function logout(){sessionStorage.clear();location.href='index.html';}
+
+// ── Helpers ──
+function myAtt(){const d=db();return(d.attendance||[]).filter(a=>a.empId===me.id);}
+function today(){return new Date().toISOString().split('T')[0];}
+function p(n){return String(n).padStart(2,'0');}
+function initials(n){return n?n.split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase():'?';}
+function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):'';}
+function greet(){const h=new Date().getHours();return h<12?'Good morning':h<17?'Good afternoon':'Good evening';}
+function calcH([ih,im],[oh,om]){const t=oh*60+om-ih*60-im;return Math.floor(t/60)+'h '+t%60+'m';}
+
+// ══ HOME ══
+function renderHome(){
+  const att=myAtt();
+  const m=new Date().getMonth()+1,y=new Date().getFullYear();
+  const mA=att.filter(a=>{const dt=new Date(a.date);return dt.getMonth()+1===m&&dt.getFullYear()===y;});
+  const pr=mA.filter(a=>a.status==='present').length;
+  const la=mA.filter(a=>a.status==='late').length;
+  const ab=mA.filter(a=>a.status==='absent').length;
+  const rate=mA.length>0?Math.round(((pr+la)/mA.length)*100):0;
+  document.getElementById('sp').textContent=pr;
+  document.getElementById('sl').textContent=la;
+  document.getElementById('sa').textContent=ab;
+  document.getElementById('sr').textContent=rate+'%';
+  buildCal(); buildTodayBox();
+}
+
+function buildCal(){
+  const att=myAtt(); const todayStr=today();
+  const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('calTitle').textContent=months[calM]+' '+calY;
+  const firstDay=new Date(calY,calM,1).getDay();
+  const dim=new Date(calY,calM+1,0).getDate();
+  const dn=['Su','Mo','Tu','We','Th','Fr','Sa'];
+  let html=dn.map(d=>`<div class="cal-dn">${d}</div>`).join('');
+  for(let i=0;i<firstDay;i++) html+=`<div class="cal-cell empty"></div>`;
+  for(let d=1;d<=dim;d++){
+    const ds=calY+'-'+p(calM+1)+'-'+p(d);
+    const dow=new Date(calY,calM,d).getDay();
+    const isFuture=ds>todayStr,isToday=ds===todayStr,isWeekend=dow===0||dow===6;
+    let cls='';
+    if(isFuture) cls='future';
+    else if(isWeekend) cls='weekend';
+    else{const rec=att.find(a=>a.date===ds);cls=rec?.status==='present'||rec?.status==='wfh'?'present':rec?.status==='late'?'late':rec?.status==='absent'?'absent':'no-data';}
+    html+=`<div class="cal-cell ${cls}${isToday?' today':''}">${d}</div>`;
+  }
+  document.getElementById('calGrid').innerHTML=html;
+}
+function prevM(){if(calM===0){calM=11;calY--;}else calM--;buildCal();}
+function nextM(){if(calM===11){calM=0;calY++;}else calM++;buildCal();}
+
+function buildTodayBox(){
+  const rec=myAtt().find(a=>a.date===today());
+  if(!rec){document.getElementById('todayBox').innerHTML=`<p style="font-size:12px;color:var(--muted);margin-bottom:12px">No attendance recorded today.</p><button class="btn primary" style="width:100%" onclick="tab('mark',document.querySelectorAll('.nav-tab')[1])">Mark Attendance →</button>`;return;}
+  const ip=rec.checkIn?rec.checkIn.split(':').map(Number):null;
+  const op=rec.checkOut?rec.checkOut.split(':').map(Number):null;
+  const hrs=ip&&op?calcH(ip,op):'—';
+  document.getElementById('todayBox').innerHTML=`
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${rowBox('Check In',rec.checkIn||'—',!!rec.checkIn)}
+      ${rowBox('Check Out',rec.checkOut||'Pending',!!rec.checkOut)}
+      ${rowBox('Hours',hrs,false)}
+      <div style="text-align:center"><span class="badge ${rec.status}">${cap(rec.status)}</span></div>
+      ${rec.gps?`<div style="font-size:10px;color:var(--muted);text-align:center">📍 ${rec.gps}</div>`:''}
+    </div>`;
+}
+function rowBox(l,v,hi){return`<div style="display:flex;justify-content:space-between;padding:9px;background:var(--off);border-radius:4px;border:1px solid var(--border)"><span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">${l}</span><span style="font-size:14px;font-weight:700;color:${hi?'var(--accent)':'var(--light)'}">${v}</span></div>`;}
+
+// ══ MARK ATTENDANCE — load existing times ══
+function loadTodayTimes(){
+  const rec=myAtt().find(a=>a.date===today());
+  if(rec?.checkIn){setTB('in',rec.checkIn);document.getElementById('btnIn').className='btn done-look';document.getElementById('btnIn').textContent='Checked In ✓';document.getElementById('btnIn').disabled=true;}
+  if(rec?.checkOut){setTB('out',rec.checkOut);document.getElementById('btnOut').className='btn done-look';document.getElementById('btnOut').textContent='Checked Out ✓';document.getElementById('btnOut').disabled=true;}
+  if(rec?.checkIn&&!rec?.checkOut){document.getElementById('btnOut').disabled=false;document.getElementById('btnOut').className='btn danger';}
+}
+function setTB(type,time){
+  const box=document.getElementById(type==='in'?'inBox':'outBox');
+  const val=document.getElementById(type==='in'?'inVal':'outVal');
+  box.classList.add('filled');val.className='tb-val set';val.textContent=time;
+}
+
+// ══ CAMERA ══
+async function startCam(){
+  const btn=document.getElementById('btnCam');
+  btn.textContent='Starting…'; btn.disabled=true;
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
+    document.getElementById('vid').srcObject=stream;
+    document.getElementById('camOv').style.display='none';
+    document.getElementById('camWrap').classList.add('scanning');
+    document.getElementById('faceOval').className='face-oval good';
+    document.getElementById('camBarL').innerHTML='Camera <span>active</span> — align face with oval';
+    btn.textContent='Stop'; btn.disabled=false; btn.onclick=stopCam;
+    document.getElementById('btnSnap').disabled=false;
+  } catch(e){
+    // Demo mode
+    document.getElementById('camOv').innerHTML='<div class="ico">🤳</div><p>Camera unavailable<br><a onclick="snapAndVerify()" style="cursor:pointer;color:var(--accent);font-weight:700">Demo: click Capture & Verify</a></p>';
+    document.getElementById('camOv').style.display='flex';
+    document.getElementById('btnSnap').disabled=false;
+    btn.textContent='Start Camera'; btn.disabled=false;
+  }
+}
+function stopCam(){
+  if(stream)stream.getTracks().forEach(t=>t.stop()); stream=null;
+  document.getElementById('camOv').innerHTML='<div class="ico">📷</div><p>Click <a onclick="startCam()" style="cursor:pointer">Start Camera</a><br>to begin verification</p>';
+  document.getElementById('camOv').style.display='flex';
+  document.getElementById('camWrap').classList.remove('scanning');
+  document.getElementById('faceOval').className='face-oval';
+  document.getElementById('camBarL').textContent='Camera inactive';
+  document.getElementById('btnCam').textContent='Start Camera'; document.getElementById('btnCam').onclick=startCam; document.getElementById('btnCam').disabled=false;
+  document.getElementById('btnSnap').disabled=true;
+}
+
+// ══ SNAP + FACE VERIFY ══
+// ══ SNAP + REAL FACE VERIFY (face-api.js) ══
+async function snapAndVerify(){
+  const vid=document.getElementById('vid');
+  const snapBtn=document.getElementById('btnSnap');
+  snapBtn.disabled=true;
+
+  if(!vid.srcObject||vid.readyState<2){
+    snapBtn.disabled=false;
+    showAttAlert('Please start your camera first.','err'); return;
+  }
+
+  // Capture current frame to canvas
+  const cvs=document.getElementById('cvs');
+  const ctx=cvs.getContext('2d');
+  cvs.width=vid.videoWidth||640; cvs.height=vid.videoHeight||480;
+  ctx.save(); ctx.scale(-1,1); ctx.drawImage(vid,-cvs.width,0); ctx.restore();
+  const snapBase64=cvs.toDataURL('image/jpeg',0.9);
+
+  // Show verification overlay
+  const ov=document.getElementById('verifyOv');
+  const ring=document.getElementById('vring');
+  const icon=document.getElementById('vringIcon');
+  const label=document.getElementById('verifyLabel');
+  const sub=document.getElementById('verifySub');
+  const scoreEl=document.getElementById('verifyScore');
+  ov.classList.add('show');
+  ring.className='vring'; icon.textContent=''; scoreEl.style.display='none';
+  label.textContent='Detecting face…'; sub.textContent='';
+
+  try{
+    if(!faceApiReady) throw new Error('MODELS_NOT_READY');
+
+    // Step 1 — detect face in live video frame
+    label.textContent='Detecting face in camera…';
+    sub.textContent='Running TinyFaceDetector';
+    const liveDetection=await faceapi
+      .detectSingleFace(vid, new faceapi.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:0.5}))
+      .withFaceLandmarks()
+      .withFaceDescriptor();
+
+    if(!liveDetection) throw new Error('NO_FACE_LIVE');
+
+    // Step 2 — load stored 128-float descriptor
+    label.textContent='Loading enrolled biometrics…';
+    sub.textContent='Retrieving your face profile';
+    await new Promise(r=>setTimeout(r,400));
+
+    const storedDescriptor=me?.faceDescriptor;
+    if(!storedDescriptor||storedDescriptor.length===0) throw new Error('NO_STORED_DESCRIPTOR');
+
+    // Step 3 — Euclidean distance between descriptors
+    label.textContent='Comparing face biometrics…';
+    sub.textContent='Computing similarity distance';
+    await new Promise(r=>setTimeout(r,500));
+
+    const stored=new Float32Array(storedDescriptor);
+    const live=liveDetection.descriptor;
+    let dist=0;
+    for(let i=0;i<128;i++) dist+=(stored[i]-live[i])**2;
+    dist=Math.sqrt(dist);
+
+    // dist < 0.5 = same person  |  dist >= 0.6 = different person
+    const score=Math.round(Math.max(0,Math.min(100,(1-(dist/0.6))*100)));
+    faceMatchScore=score;
+    const pass=dist<0.5;
+
+    ring.className='vring '+(pass?'done':'fail');
+    icon.textContent=pass?'✓':'✗';
+    scoreEl.textContent=score+'%';
+    scoreEl.className='verify-score'+(pass?'':' fail');
+    scoreEl.style.display='block';
+    label.textContent=pass?'Identity verified!':'Face does not match — try again';
+    sub.textContent=pass
+      ?'Euclidean dist: '+dist.toFixed(3)+' (< 0.5 threshold)'
+      :'Euclidean dist: '+dist.toFixed(3)+' (≥ 0.5 — not matched)';
+
+    setTimeout(()=>{
+      ov.classList.remove('show');
+      stopCam();
+      if(pass){
+        document.getElementById('snapThumb').src=snapBase64;
+        document.getElementById('snapScore').textContent=score+'%';
+        document.getElementById('snapPrev').classList.add('show');
+        document.getElementById('scoreLabel').textContent=score+'% match';
+        document.getElementById('scoreLabel').className='score-badge ok';
+        snapDone=true; faceDone=true;
+        markCk('ck1'); markCk('ck3');
+        updateBtns();
+      } else {
+        document.getElementById('scoreLabel').textContent='Failed – retry';
+        document.getElementById('scoreLabel').className='score-badge';
+        snapBtn.disabled=false;
+        showAttAlert('Face does not match ('+score+'%). Face the camera directly in good lighting and try again.','err');
+      }
+    },1800);
+
+  } catch(e){
+    ov.classList.remove('show');
+    snapBtn.disabled=false;
+    if(e.message==='NO_FACE_LIVE'){
+      showAttAlert('❌ No face detected. Look directly at the camera in good lighting.','err');
+    } else if(e.message==='NO_STORED_DESCRIPTOR'){
+      showAttAlert('⚠ No biometric profile found. Please re-register or contact your admin.','err');
+    } else if(e.message==='MODELS_NOT_READY'){
+      showAttAlert('⏳ Face AI models still loading. Wait a moment and try again.','err');
+    } else {
+      showAttAlert('Verification error: '+e.message+'. Please try again.','err');
+    }
+  }
+}
+
+
+// ══ GPS — watchPosition for continuously improving accuracy ══
+let gpsWatchId=null;
+
+function getGPS(){
+  const btn=document.getElementById('btnGps');
+  const modal=document.getElementById('gpsLoadingModal');
+  const phase=document.getElementById('gpsPhase');
+
+  // Stop any previous watch
+  if(gpsWatchId!==null){
+    navigator.geolocation.clearWatch(gpsWatchId);
+    gpsWatchId=null;
+  }
+
+  btn.textContent='Locating…'; btn.disabled=true;
+
+  if(!navigator.geolocation){
+    showAttAlert('Geolocation is not supported by your browser.','err');
+    btn.textContent='Not Supported'; return;
+  }
+
+  if(navigator.permissions){
+    navigator.permissions.query({name:'geolocation'}).then(r=>{
+      if(r.state==='denied'){gpsError(1,btn);return;}
+      startWatch(btn,modal,phase);
+    }).catch(()=>startWatch(btn,modal,phase));
+  } else {
+    startWatch(btn,modal,phase);
+  }
+}
+
+function startWatch(btn,modal,phase){
+  modal.classList.add('show');
+  phase.textContent='Allow location access in your browser…';
+
+  let bestAcc=Infinity;
+  let firstFixDone=false;
+
+  // Auto-stop after 20 seconds whatever happens
+  const watchTimeout=setTimeout(()=>{
+    if(gpsWatchId!==null){
+      navigator.geolocation.clearWatch(gpsWatchId);
+      gpsWatchId=null;
+    }
+    modal.classList.remove('show');
+    if(!firstFixDone){
+      gpsError(3,btn);
+    } else {
+      // We have a fix, just not ideal accuracy — that's OK
+      btn.textContent='Refresh Location'; btn.disabled=false;
+      setGPS(capturedLat||0, capturedLng||0, capturedAcc||999, true);
+    }
+  },20000);
+
+  gpsWatchId=navigator.geolocation.watchPosition(
+    pos=>{
+      const lat=pos.coords.latitude;
+      const lng=pos.coords.longitude;
+      const acc=pos.coords.accuracy;
+
+      if(acc<bestAcc){
+        bestAcc=acc;
+        if(!firstFixDone){
+          firstFixDone=true;
+          modal.classList.remove('show');
+          btn.textContent='Improving accuracy…';
+        }
+        // Update map + coords immediately with every better reading
+        setGPS(lat, lng, acc, acc<=60);
+      }
+
+      // Stop once we hit GPS-quality accuracy (≤20m)
+      if(acc<=20){
+        clearTimeout(watchTimeout);
+        navigator.geolocation.clearWatch(gpsWatchId);
+        gpsWatchId=null;
+        setGPS(lat, lng, acc, true);
+        btn.textContent='Refresh Location'; btn.disabled=false;
+      }
+    },
+    err=>{
+      clearTimeout(watchTimeout);
+      if(gpsWatchId!==null){navigator.geolocation.clearWatch(gpsWatchId);gpsWatchId=null;}
+      modal.classList.remove('show');
+      gpsError(err.code, btn);
+    },
+    {enableHighAccuracy:true, timeout:15000, maximumAge:5000}
+  );
+}
+
+function gpsError(code,btn){
+  if(btn){btn.textContent='Try Again'; btn.disabled=false;}
+  let msg='';
+  if(code===1){
+    msg='Location access denied. Go to browser Settings → Site permissions → Location → Allow for this site.';
+    document.getElementById('gpsCoords').textContent='Permission denied';
+    document.getElementById('gpsAddr').textContent='Enable location in browser settings then press Try Again';
+  } else if(code===2){
+    msg='Location unavailable. Check your internet or move near a window.';
+    document.getElementById('gpsCoords').textContent='Signal unavailable';
+    document.getElementById('gpsAddr').textContent='Try moving closer to a window or outdoors';
+  } else {
+    msg='Location timed out. Press Try Again.';
+    document.getElementById('gpsCoords').textContent='Timed out — press Try Again';
+    document.getElementById('gpsAddr').textContent='';
+  }
+  document.getElementById('gpsLed').className='gps-led';
+  document.getElementById('gpsStatusTxt').textContent='Error';
+  showAttAlert('📍 '+msg,'err');
+}
+
+function setGPS(lat,lng,acc,final){
+  capturedLat=lat; capturedLng=lng; capturedAcc=acc;
+
+  const latN=parseFloat(lat);
+  const lngN=parseFloat(lng);
+  const latF=latN.toFixed(6);
+  const lngF=lngN.toFixed(6);
+  const accM=Math.round(acc||999);
+
+  // ── Coordinates display ──
+  document.getElementById('gpsCoords').textContent=latF+'° N, '+lngF+'° E';
+
+  // ── Accuracy badge ──
+  const accEl=document.getElementById('gpsAcc');
+  accEl.style.display='block';
+  if(accM<=20){
+    accEl.textContent='± '+accM+' m — Excellent accuracy';
+    accEl.style.color='var(--accent)';
+  } else if(accM<=100){
+    accEl.textContent='± '+accM+' m — Good accuracy';
+    accEl.style.color='var(--amber)';
+  } else {
+    accEl.textContent='± '+accM+' m — Network-based (± '+accM+' m)';
+    accEl.style.color='var(--red)';
+  }
+
+  document.getElementById('gpsLed').className='gps-led live';
+  document.getElementById('gpsStatusTxt').textContent=final?'Live':'Acquiring…';
+
+  // ── Map: clickable Google Maps thumbnail (no API key needed) ──
+  // Static map via maps.google.com works in any browser, shows real tiles
+  const mapsUrl=`https://maps.google.com/maps?q=${latF},${lngF}&z=16&output=embed`;
+  document.getElementById('mapFrame').innerHTML=
+    `<iframe
+      src="${mapsUrl}"
+      style="width:100%;height:100%;border:none"
+      loading="lazy"
+      allowfullscreen
+      referrerpolicy="no-referrer-when-downgrade"
+      title="Your location">
+    </iframe>`;
+
+  // ── Reverse geocode: get readable address from Nominatim (free, no key) ──
+  document.getElementById('gpsAddr').textContent='Getting address…';
+  fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latF}&lon=${lngF}&format=json`,{
+    headers:{'Accept-Language':'en','User-Agent':'AttendTrack-App'}
+  })
+  .then(r=>r.json())
+  .then(data=>{
+    const a=data.address||{};
+    // Build a short readable address: road, suburb/neighbourhood, city
+    const parts=[
+      a.road||a.pedestrian||a.footway||'',
+      a.suburb||a.neighbourhood||a.village||'',
+      a.city||a.town||a.county||''
+    ].filter(Boolean);
+    const addr=parts.length>0 ? parts.join(', ') : data.display_name?.split(',').slice(0,3).join(',') || 'Address found';
+    document.getElementById('gpsAddr').textContent='📍 '+addr;
+  })
+  .catch(()=>{
+    document.getElementById('gpsAddr').textContent=final?'Location captured ✓':'Refining accuracy…';
+  });
+
+  if(final){
+    gpsDone=true; markCk('ck2'); updateBtns();
+  }
+}
+
+// ══ Checklist & button state ══
+function markCk(id){const el=document.getElementById(id);el.classList.add('done');el.querySelector('.chk-mark').textContent='✓';}
+function updateBtns(){
+  const ready=snapDone&&gpsDone&&faceDone;
+  const rec=myAtt().find(a=>a.date===today());
+  const inBtn=document.getElementById('btnIn'),outBtn=document.getElementById('btnOut');
+  if(!rec?.checkIn){inBtn.disabled=!ready;if(ready)inBtn.className='btn primary';}
+  if(rec?.checkIn&&!rec?.checkOut){outBtn.disabled=!ready;if(ready)outBtn.className='btn danger';}
+}
+function selWT(t){wt=t;['office','wfh','field'].forEach(x=>{document.getElementById('wt-'+x).className='wt'+(x===t?' sel':'');});}
+
+// ══ Mark IN / OUT ══
+function markAtt(type){
+  if(!snapDone||!gpsDone||!faceDone){showAttAlert('Complete all 3 steps first.','err');return;}
+  const d=db(); const todayStr=today(); const now=new Date();
+  const ts=p(now.getHours())+':'+p(now.getMinutes());
+  const isLate=type==='in'&&(now.getHours()>9||(now.getHours()===9&&now.getMinutes()>15));
+  let rec=(d.attendance||[]).find(a=>a.empId===me.id&&a.date===todayStr);
+
+  const gpsStr=capturedLat&&capturedLng?`${capturedLat.toFixed(6)}° N, ${capturedLng.toFixed(6)}° E`:'Unknown';
+
+  if(type==='in'){
+    if(rec?.checkIn){showAttAlert('Already checked in today.','err');return;}
+    if(!rec){rec={id:'ATT-'+Date.now(),empId:me.id,date:todayStr,checkIn:null,checkOut:null,score:faceMatchScore,gps:gpsStr,lat:capturedLat,lng:capturedLng,status:'',workType:wt};d.attendance=d.attendance||[];d.attendance.push(rec);}
+    rec.checkIn=ts; rec.status=isLate?'late':'present'; rec.score=faceMatchScore; rec.workType=wt; rec.gps=gpsStr; rec.lat=capturedLat; rec.lng=capturedLng;
+    setTB('in',ts);
+    document.getElementById('btnIn').className='btn done-look';
+    document.getElementById('btnIn').textContent='Checked In ✓';
+    document.getElementById('btnIn').disabled=true;
+    document.getElementById('btnOut').disabled=false;
+    document.getElementById('btnOut').className='btn danger';
+    setSbar('in',ts);
+    showAttAlert('✓ Checked in at '+ts+(isLate?' — Late':' — On time')+' · GPS: '+gpsStr,'ok');
+  } else {
+    if(!rec?.checkIn){showAttAlert('Check in first.','err');return;}
+    if(rec.checkOut){showAttAlert('Already checked out.','err');return;}
+    rec.checkOut=ts; rec.checkOutGps=gpsStr; rec.checkOutLat=capturedLat; rec.checkOutLng=capturedLng;
+    setTB('out',ts);
+    document.getElementById('btnOut').className='btn done-look';
+    document.getElementById('btnOut').textContent='Checked Out ✓';
+    document.getElementById('btnOut').disabled=true;
+    setSbar('done',rec.checkIn,ts);
+    showAttAlert('✓ Checked out at '+ts+' · GPS: '+gpsStr+' · Great work!','ok');
+  }
+  save(d); buildTodayBox(); buildCal();
+}
+
+function setSbar(state,inT,outT){
+  const bar=document.getElementById('sbar'),dot=document.getElementById('sbDot'),st=document.getElementById('sbSt'),sub=document.getElementById('sbSub');
+  if(state==='in'){bar.className='sbar in';dot.className='sb-dot g';st.textContent='Checked In';sub.textContent='Since '+inT;}
+  else if(state==='done'){bar.className='sbar done';dot.className='sb-dot gr';st.textContent='Work Complete';sub.textContent=inT+' – '+outT;}
+}
+function showAttAlert(msg,type){const el=document.getElementById('markAlert');el.className='alert '+type;el.textContent=msg;el.style.display='block';setTimeout(()=>el.style.display='none',6000);}
+
+// ══ HISTORY ══
+function populateHistSel(){
+  const sel=document.getElementById('histSel');
+  const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const now=new Date(); let html='';
+  for(let i=0;i<6;i++){const dt=new Date(now.getFullYear(),now.getMonth()-i,1);html+=`<option value="${dt.getFullYear()+'-'+p(dt.getMonth()+1)}"${i===0?' selected':''}>${months[dt.getMonth()]} ${dt.getFullYear()}</option>`;}
+  sel.innerHTML=html;
+}
+function renderHistory(){
+  const mStr=document.getElementById('histSel')?.value||today().slice(0,7);
+  const att=myAtt().filter(a=>a.date.startsWith(mStr)).sort((a,b)=>b.date.localeCompare(a.date));
+  if(att.length===0){document.getElementById('histWrap').innerHTML='<div style="text-align:center;padding:28px;font-size:12px;color:var(--muted)">No records for this month.</div>';return;}
+  document.getElementById('histWrap').innerHTML=`<div class="tw"><table>
+    <thead><tr><th>Date</th><th>In</th><th>Out</th><th>Hours</th><th>Status</th><th>Score</th><th>GPS</th></tr></thead>
+    <tbody>${att.map(a=>{
+      const ip=a.checkIn?a.checkIn.split(':').map(Number):null;
+      const op=a.checkOut?a.checkOut.split(':').map(Number):null;
+      const hrs=ip&&op?calcH(ip,op):'—';
+      return `<tr>
+        <td style="font-size:11px;font-family:'DM Mono',monospace">${a.date}</td>
+        <td style="font-weight:700;color:${a.checkIn?'var(--accent)':'var(--muted)'}">${a.checkIn||'—'}</td>
+        <td style="color:var(--muted)">${a.checkOut||'—'}</td>
+        <td style="font-size:11px">${hrs}</td>
+        <td><span class="badge ${a.status}">${cap(a.status)}</span></td>
+        <td style="font-weight:700;font-size:11px;color:var(--accent)">${a.score?a.score+'%':'—'}</td>
+        <td style="font-size:9px;color:var(--muted);font-family:'DM Mono',monospace">${a.gps||'—'}</td>
+      </tr>`;
+    }).join('')}</tbody></table></div>`;
+}
+
+// ══ PROFILE ══
+function renderProfile(){
+  const d=db();
+  const dept=(d.departments||[]).find(x=>x.id===me.deptId);
+  const co=(d.companies||[]).find(x=>x.id===me.companyId);
+
+  // Avatar
+  const avB=document.getElementById('profAvB');
+  if(me.facePhoto) avB.innerHTML=`<img src="${me.facePhoto}" style="width:100%;height:100%;object-fit:cover">`;
+  else avB.textContent=initials(me.name);
+
+  document.getElementById('profNm').textContent=me.name;
+  document.getElementById('profPs').textContent=me.pos||'Employee';
+  document.getElementById('profId2').textContent=me.id;
+
+  const ft=document.getElementById('faceTag');
+  ft.textContent=me.faceEnrolled?'✓ Face Enrolled':'○ No face enrolled';
+  ft.style.background=me.faceEnrolled?'var(--abg)':'var(--off)';
+  ft.style.borderColor=me.faceEnrolled?'var(--aborder)':'var(--border)';
+  ft.style.color=me.faceEnrolled?'var(--accent)':'var(--muted)';
+
+  // Read-only details grid
+  document.getElementById('infoGrid').innerHTML=`
+    <div class="ii"><div class="ii-l">Full Name</div><div class="ii-v">${me.name}</div></div>
+    <div class="ii"><div class="ii-l">Employee ID</div><div class="ii-v" style="font-family:'DM Mono',monospace;font-size:11px">${me.id}</div></div>
+    <div class="ii"><div class="ii-l">Department</div><div class="ii-v">${dept?.name||'—'}</div></div>
+    <div class="ii"><div class="ii-l">Company</div><div class="ii-v">${co?.name||'—'}</div></div>
+    <div class="ii"><div class="ii-l">Position</div><div class="ii-v">${me.pos||'—'}</div></div>
+    <div class="ii"><div class="ii-l">Email</div><div class="ii-v" style="font-size:10px;font-family:'DM Mono',monospace">${me.email}</div></div>
+    <div class="ii"><div class="ii-l">Phone</div><div class="ii-v">${me.phone||'—'}</div></div>
+    <div class="ii"><div class="ii-l">Join Date</div><div class="ii-v">${me.joinDate||'—'}</div></div>`;
+
+  // Pre-fill edit fields
+  document.getElementById('editPhone').value=me.phone||'';
+  document.getElementById('editPos').value=me.pos||'';
+  document.getElementById('editAddr').value=me.address||'';
+
+  // Monthly stats
+  const m=new Date().getMonth()+1, y=new Date().getFullYear();
+  const mA=myAtt().filter(a=>{const dt=new Date(a.date);return dt.getMonth()+1===m&&dt.getFullYear()===y;});
+  const pr=mA.filter(a=>a.status==='present').length;
+  const la=mA.filter(a=>a.status==='late').length;
+  const ab=mA.filter(a=>a.status==='absent').length;
+  const rate=mA.length>0?Math.round(((pr+la)/mA.length)*100):0;
+  document.getElementById('msRow').innerHTML=`
+    <div class="ms-i"><div class="ms-n g">${pr}</div><div class="ms-l">Present</div></div>
+    <div class="ms-i"><div class="ms-n a">${la}</div><div class="ms-l">Late</div></div>
+    <div class="ms-i"><div class="ms-n r">${ab}</div><div class="ms-l">Absent</div></div>
+    <div class="ms-i"><div class="ms-n g">${rate}%</div><div class="ms-l">Rate</div></div>`;
+}
+
+function toggleEditProfile(){
+  const view=document.getElementById('profViewMode');
+  const edit=document.getElementById('profEditMode');
+  const btn=document.getElementById('btnEditProf');
+  const isEditing=edit.style.display!=='none';
+  view.style.display=isEditing?'block':'none';
+  edit.style.display=isEditing?'none':'block';
+  btn.textContent=isEditing?'✏ Edit':'✕ Cancel';
+  document.getElementById('profEditErr').style.display='none';
+  document.getElementById('profEditOk').style.display='none';
+}
+
+function saveProfileEdit(){
+  const phone=document.getElementById('editPhone').value.trim();
+  const pos=document.getElementById('editPos').value.trim();
+  const addr=document.getElementById('editAddr').value.trim();
+  const err=document.getElementById('profEditErr');
+  const ok=document.getElementById('profEditOk');
+
+  const d=db();
+  const emp=d.employees.find(e=>e.id===me.id);
+  if(!emp){err.textContent='Could not find your record.';err.style.display='block';return;}
+
+  if(phone) emp.phone=phone;
+  if(pos)   emp.pos=pos;
+  if(addr)  emp.address=addr;
+  me=emp;
+  save(d);
+
+  ok.textContent='Profile updated successfully!';
+  ok.style.display='block';
+  setTimeout(()=>{
+    ok.style.display='none';
+    toggleEditProfile();
+    renderProfile();
+    // Update nav name display
+    document.getElementById('navName').textContent=me.name;
+    document.getElementById('profPs').textContent=me.pos||'Employee';
+  },1200);
+}
+
+function togglePwChange(){
+  const form=document.getElementById('pwChangeForm');
+  form.style.display=form.style.display==='none'?'block':'none';
+  document.getElementById('pwErr').style.display='none';
+  document.getElementById('pwOk').style.display='none';
+  document.getElementById('oldPw').value='';
+  document.getElementById('newPw').value='';
+  document.getElementById('newPw2').value='';
+}
+
+function saveNewPassword(){
+  const oldPw=document.getElementById('oldPw').value;
+  const newPw=document.getElementById('newPw').value;
+  const newPw2=document.getElementById('newPw2').value;
+  const err=document.getElementById('pwErr');
+  const ok=document.getElementById('pwOk');
+  err.style.display='none';
+
+  if(!oldPw||!newPw||!newPw2){err.textContent='All fields are required.';err.style.display='block';return;}
+  if(newPw.length<6){err.textContent='New password must be at least 6 characters.';err.style.display='block';return;}
+  if(newPw!==newPw2){err.textContent='New passwords do not match.';err.style.display='block';return;}
+
+  const d=db();
+  const emp=d.employees.find(e=>e.id===me.id);
+  if(!emp||emp.pw!==oldPw){err.textContent='Current password is incorrect.';err.style.display='block';return;}
+
+  emp.pw=newPw;
+  save(d);
+  ok.textContent='Password changed successfully!';
+  ok.style.display='block';
+  setTimeout(()=>togglePwChange(),2000);
+}
+</script>
+</body>
+</html>
