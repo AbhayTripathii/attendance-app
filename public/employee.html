@@ -988,7 +988,7 @@ async function markAtt(type){
       if(rec&&rec.check_in_time){showAttAlert('Already checked in.','err');return;}
       const res=await apiFetch('/api/attendance/checkin',{
         method:'POST',
-        body:JSON.stringify({employee_id:me.id,latitude:capturedLat,longitude:capturedLng,face_match_score:faceMatchScore,work_type:wt,ip_address:''})
+        body:JSON.stringify({employee_id:me.id,user_id:me.id,latitude:capturedLat,longitude:capturedLng,face_match_score:faceMatchScore,work_type:wt,ip_address:''})
       });
       const attRes=await apiFetch('/api/attendance?user_id='+me.id+'&limit=100');
       myAttendance=attRes.data||[];
