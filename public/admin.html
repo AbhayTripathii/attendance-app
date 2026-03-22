@@ -496,157 +496,78 @@
 </div>
 
 <script>
+<script>
 // ═══════════════════════════════════════════
-const DB_KEY = 'at_db';
-function db()  { try{return JSON.parse(localStorage.getItem(DB_KEY))||{companies:[],admins:[],departments:[],employees:[],attendance:[]}}catch(e){return{companies:[],admins:[],departments:[],employees:[],attendance:[]}} }
-function save(d){ localStorage.setItem(DB_KEY,JSON.stringify(d)) }
+//  API CONFIG
+// ═══════════════════════════════════════════
+const API = 'https://attendance-app-at.up.railway.app';
+
+async function apiFetch(path, options={}){
+  const token=sessionStorage.getItem('token');
+  const headers={'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})};
+  const res=await fetch(API+path,{...options,headers});
+  const data=await res.json();
+  if(!res.ok) throw new Error(data.error||'Request failed');
+  return data;
+}
 
 // ── Auth ──
 const sess = JSON.parse(sessionStorage.getItem('at_session')||'null');
 if(!sess||sess.role!=='admin'){ location.href='index.html'; }
 
 let adminData = null;
-let companyData = null;
+let allDepts = [], allEmps = [], allAtt = [];
 
-document.addEventListener('DOMContentLoaded',()=>{
-  const d = db();
-  adminData   = d.admins.find(a=>a.id===sess.id);
-  companyData = d.companies.find(c=>c.id===sess.companyId);
-
-  if(!adminData){ logout(); return; }
-
-  const inits = initials(adminData.name);
-  document.getElementById('sbAv').textContent  = inits;
-  document.getElementById('sbName').textContent = adminData.name;
-  document.getElementById('sbCompany').textContent = companyData?.name || 'My Company';
+document.addEventListener('DOMContentLoaded', async ()=>{
+  if(!sess){ logout(); return; }
+  document.getElementById('sbAv').textContent  = initials(sess.name);
+  document.getElementById('sbName').textContent = sess.name;
   document.getElementById('pgDate').textContent = new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   document.getElementById('attDate').value = today();
+  document.getElementById('sbCompany').textContent = 'Loading…';
 
-  // Show company code in sidebar + departments section
-  const coCode = sess.companyId || '—';
-  document.getElementById('sbCoCode').textContent = coCode;
-  document.getElementById('coCodeDisplay').textContent = coCode;
+  // Hide wizard for production (managed via backend)
+  document.getElementById('wizardOverlay').style.display='none';
 
-  // If setup not done — show wizard
-  if(!adminData.setupDone){
-    document.getElementById('wizardOverlay').style.display='flex';
-    document.getElementById('wizCompany').value = companyData?.name||'';
-    document.getElementById('wizAdminName').value = adminData.name;
-    wizStep = 1; updateWizUI();
-  } else {
-    document.getElementById('wizardOverlay').style.display='none';
-    refreshAll();
-  }
-
+  await loadAllData();
+  refreshAll();
   populateAttDeptFilter();
 });
 
+async function loadAllData(){
+  try{
+    const [deptsRes, empsRes, attRes] = await Promise.all([
+      apiFetch('/api/departments'),
+      apiFetch('/api/employees'),
+      apiFetch('/api/attendance')
+    ]);
+    allDepts = deptsRes.data || [];
+    allEmps  = empsRes.data  || [];
+    allAtt   = attRes.data   || [];
+    document.getElementById('sbCompany').textContent = 'AttendTrack';
+    const coCode = 'CO-'+sess.id;
+    if(document.getElementById('sbCoCode')) document.getElementById('sbCoCode').textContent = coCode;
+    if(document.getElementById('coCodeDisplay')) document.getElementById('coCodeDisplay').textContent = coCode;
+  }catch(e){
+    console.error('Failed to load data:',e.message);
+  }
+}
+
 function logout(){ sessionStorage.clear(); location.href='index.html'; }
-function openWizard(){
-  document.getElementById('wizardOverlay').style.display='flex';
-  wizStep=1; updateWizUI();
-}
+function openWizard(){ toast('Setup is managed via the admin panel.'); }
 
-// ══ WIZARD ══════════════════════════════════
-let wizStep = 1;
-const WIZARD_STEPS = 3;
-let pendingDepts = [];
-
-function updateWizUI(){
-  for(let i=1;i<=WIZARD_STEPS;i++){
-    const ws = document.getElementById('ws'+i);
-    const wp = document.getElementById('wp'+i);
-    ws.className = 'wiz-step' + (i===wizStep?' active':i<wizStep?' done':'');
-    wp.className = 'wiz-panel' + (i===wizStep?' on':'');
-  }
-  document.getElementById('wizBack').style.visibility = wizStep>1?'visible':'hidden';
-  const nextBtn = document.getElementById('wizNext');
-  nextBtn.textContent = wizStep<WIZARD_STEPS ? 'Next →' : 'Finish Setup';
-  if(wizStep===3) buildInviteList();
-}
-
-function wizNext(){
-  if(wizStep===1){
-    const name = document.getElementById('wizCompany').value.trim();
-    if(!name){ showE('wizErr1','Enter company name.'); return; }
-    const d = db();
-    const co = d.companies.find(c=>c.id===sess.companyId);
-    if(co){ co.name = name; save(d); companyData = co; document.getElementById('sbCompany').textContent = name; }
-    wizStep=2; updateWizUI(); renderDeptChips(); return;
-  }
-  if(wizStep===2){
-    if(pendingDepts.length===0){ showE('wizErr2','Add at least one department.'); return; }
-    // Save departments
-    const d = db();
-    pendingDepts.forEach(name=>{
-      if(!d.departments.find(x=>x.name.toLowerCase()===name.toLowerCase()&&x.companyId===sess.companyId)){
-        d.departments.push({ id:'DEPT-'+Date.now()+'-'+Math.random().toString(36).slice(2,5), name, companyId:sess.companyId, createdAt:new Date().toISOString() });
-      }
-    });
-    save(d);
-    wizStep=3; updateWizUI(); return;
-  }
-  if(wizStep===3){
-    // Mark setup done
-    const d = db();
-    const a = d.admins.find(x=>x.id===sess.id);
-    if(a) a.setupDone = true;
-    save(d);
-    document.getElementById('wizardOverlay').style.display='none';
-    refreshAll();
-  }
-}
-
-function wizPrev(){
-  if(wizStep>1){ wizStep--; updateWizUI(); if(wizStep===2) renderDeptChips(); }
-}
-
-function renderDeptChips(){
-  // Also show already-saved depts for this company
-  const d = db();
-  const saved = (d.departments||[]).filter(x=>x.companyId===sess.companyId).map(x=>x.name);
-  const all = [...new Set([...saved,...pendingDepts])];
-  pendingDepts = all;
-  document.getElementById('deptChips').innerHTML = all.map(n=>`
-    <div class="dept-chip">${n}<button onclick="removePendingDept('${n}')">×</button></div>`).join('');
-}
-
-function addWizDept(){
-  const inp = document.getElementById('newDeptInput');
-  const name = inp.value.trim();
-  if(!name) return;
-  if(!pendingDepts.includes(name)) pendingDepts.push(name);
-  inp.value='';
-  renderDeptChips();
-}
-function removePendingDept(n){ pendingDepts=pendingDepts.filter(x=>x!==n); renderDeptChips(); }
-
-function buildInviteList(){
-  const d = db();
-  const depts = (d.departments||[]).filter(x=>x.companyId===sess.companyId);
-  const base = location.origin + location.pathname.replace('admin.html','') + 'index.html';
-  document.getElementById('inviteList').innerHTML = depts.map((dep,i)=>{
-    const link = `${base}?join=${dep.id}&co=${dep.companyId}`;
-    return `<div class="invite-item">
-      <div class="invite-dept">${dep.name}</div>
-      <div class="invite-link-row">
-        <div class="invite-link" id="il-${i}">${link}</div>
-        <button class="copy-btn" onclick="copyLink('${link}',this)">Copy</button>
-      </div>
-      <div class="copy-ok" id="ck-${i}">✓ Copied!</div>
-    </div>`;
-  }).join('') || '<div style="font-size:12px;color:var(--muted);padding:10px 0">No departments added yet.</div>';
-}
-
-function copyLink(link, btn){
-  navigator.clipboard.writeText(link).then(()=>{
-    const orig = btn.textContent; btn.textContent='Copied!';
-    setTimeout(()=>btn.textContent=orig,2000);
-  }).catch(()=>{ prompt('Copy this link:', link); });
-}
-
-// ══ MAIN SECTIONS ════════════════════════════
-function refreshAll(){ renderDashboard(); renderEmps(); renderAtt(); renderDepts(); renderReports(); populateAttDeptFilter(); }
+// ══ HELPERS ═══════════════════════════════════
+function myEmps(){ return allEmps; }
+function myAtt(){ return allAtt; }
+function myDepts(){ return allDepts; }
+function today(){ return new Date().toISOString().split('T')[0]; }
+function initials(n){ return n?n.split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase():'?'; }
+function cap(s){ return s?s.charAt(0).toUpperCase()+s.slice(1):''; }
+function fmtDate(d){ return d?new Date(d+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'—'; }
+function last5WorkDays(){ const days=[];const d=new Date();let n=0;while(n<5){if(d.getDay()!==0&&d.getDay()!==6){days.unshift({str:d.toISOString().split('T')[0],label:['Su','Mo','Tu','We','Th','Fr','Sa'][d.getDay()]});n++;}d.setDate(d.getDate()-1);}return days; }
+function empty(t,s){ return `<div class="empty"><div class="empty-icon">○</div><div class="empty-t">${t}</div><div class="empty-s">${s}</div></div>`; }
+function closeM(id){ document.getElementById(id).classList.remove('open'); }
+function toast(msg){ const t=document.createElement('div');t.style.cssText='position:fixed;bottom:20px;right:20px;background:var(--text);color:#fff;padding:10px 16px;border-radius:3px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;z-index:999';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3000); }
 
 const titles = { dashboard:'Dashboard', employees:'Employees', attendance:'Attendance Records', departments:'Departments', reports:'Reports', settings:'Settings' };
 function nav(name,el){
@@ -655,20 +576,22 @@ function nav(name,el){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   if(el) el.classList.add('active');
   document.getElementById('pgTitle').textContent = titles[name]||name;
-  if(name==='settings') loadSettings();
   refreshAll();
 }
 
+function refreshAll(){ renderDashboard(); renderEmps(); renderAtt(); renderDepts(); renderReports(); }
+
 // ══ DASHBOARD ════════════════════════════════
 function renderDashboard(){
-  const d = db();
-  const emps = myEmps(d);
-  const att  = myAtt(d);
-  const todayStr = today();
-  const todayAtt = att.filter(a=>a.date===todayStr);
-  const present = todayAtt.filter(a=>a.status==='present'||a.status==='wfh').length;
-  const late    = todayAtt.filter(a=>a.status==='late').length;
-  const absent  = emps.filter(e=>!todayAtt.find(a=>a.empId===e.id)).length;
+  const emps=myEmps(); const att=myAtt(); const depts=myDepts();
+  const todayStr=today();
+  const todayAtt=att.filter(a=>{
+    const d=a.check_in_time||a.date||'';
+    return d.startsWith(todayStr);
+  });
+  const present=todayAtt.filter(a=>a.status==='present'||a.status==='wfh').length;
+  const late=todayAtt.filter(a=>a.status==='late').length;
+  const absent=emps.filter(e=>!todayAtt.find(a=>a.user_id===e.id)).length;
 
   document.getElementById('dashStats').innerHTML=`
     <div class="stat"><div class="stat-n">${emps.length}</div><div class="stat-l">Total Employees</div></div>
@@ -676,32 +599,29 @@ function renderDashboard(){
     <div class="stat"><div class="stat-n a">${late}</div><div class="stat-l">Late Today</div></div>
     <div class="stat"><div class="stat-n r">${absent}</div><div class="stat-l">Absent Today</div></div>`;
 
-  const depts = myDepts(d);
-
-  // Today table
   if(emps.length===0){
-    document.getElementById('dashToday').innerHTML=empty('No employees yet','Employees will appear after they register via your department invite links.');
+    document.getElementById('dashToday').innerHTML=empty('No employees yet','Employees appear after they register and are assigned a department.');
   } else {
     document.getElementById('dashToday').innerHTML=`<div class="tw"><table>
       <thead><tr><th>Employee</th><th>In</th><th>Status</th><th>Score</th></tr></thead>
-      <tbody>${emps.map(e=>{
-        const a=todayAtt.find(x=>x.empId===e.id);
-        const dep=depts.find(x=>x.id===e.deptId);
+      <tbody>${emps.slice(0,10).map(e=>{
+        const a=todayAtt.find(x=>x.user_id===e.id);
+        const dep=depts.find(x=>x.id===e.department_id);
+        const inTime=a?.check_in_time?new Date(a.check_in_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'—';
         return `<tr>
           <td><div class="ec"><div class="av">${initials(e.name)}</div><div><div class="en">${e.name}</div><div class="ed">${dep?.name||'—'}</div></div></div></td>
-          <td style="color:${a?'var(--accent)':'var(--muted)'};">${a?.checkIn||'—'}</td>
+          <td style="color:${a?'var(--accent)':'var(--muted)'};">${inTime}</td>
           <td><span class="badge ${a?a.status:'absent'}">${cap(a?a.status:'Absent')}</span></td>
-          <td>${a?.score?`<div class="sc"><div class="sb"><div class="sf" style="width:${a.score}%"></div></div><span style="font-size:10px;font-weight:700">${a.score}%</span></div>`:'—'}</td>
+          <td>${a?.face_match_score?`<div class="sc"><div class="sb"><div class="sf" style="width:${a.face_match_score}%"></div></div><span style="font-size:10px;font-weight:700">${Math.round(a.face_match_score)}%</span></div>`:'—'}</td>
         </tr>`;
       }).join('')}</tbody></table></div>`;
   }
 
-  // Depts
-  document.getElementById('dashDepts').innerHTML = depts.length===0
-    ? empty('No departments','Create departments and share invite links.')
+  document.getElementById('dashDepts').innerHTML=depts.length===0
+    ? empty('No departments','Create departments first.')
     : depts.map(dep=>{
-        const cnt=emps.filter(e=>e.deptId===dep.id).length;
-        const dAtt=todayAtt.filter(a=>emps.find(e=>e.id===a.empId&&e.deptId===dep.id));
+        const cnt=emps.filter(e=>e.department_id===dep.id).length;
+        const dAtt=todayAtt.filter(a=>emps.find(e=>e.id===a.user_id&&e.department_id===dep.id));
         const rate=cnt>0?Math.round((dAtt.length/cnt)*100):0;
         return `<div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--off)">
           <div><div style="font-size:12px;font-weight:700">${dep.name}</div><div style="font-size:10px;color:var(--muted)">${cnt} employee${cnt!==1?'s':''}</div></div>
@@ -712,7 +632,7 @@ function renderDashboard(){
   // Chart
   const days=last5WorkDays();
   document.getElementById('dashChart').innerHTML=`<div class="bc">${days.map(day=>{
-    const dAtt=att.filter(a=>a.date===day.str);
+    const dAtt=att.filter(a=>(a.check_in_time||a.date||'').startsWith(day.str));
     const p=dAtt.filter(a=>a.status==='present'||a.status==='wfh').length;
     const l=dAtt.filter(a=>a.status==='late').length;
     const a2=Math.max(0,emps.length-p-l);
@@ -731,88 +651,88 @@ function renderDashboard(){
   </div>`;
 
   // Activity
-  const recAtt=[...myAtt(d)].sort((a,b)=>b.date.localeCompare(a.date)||(b.checkIn||'').localeCompare(a.checkIn||'')).slice(0,5);
+  const recAtt=[...att].sort((a,b)=>(b.check_in_time||'').localeCompare(a.check_in_time||'')).slice(0,5);
   document.getElementById('dashActivity').innerHTML=recAtt.length===0
-    ? empty('No activity yet','Attendance events will appear here.')
+    ? empty('No activity yet','Attendance events appear here.')
     : `<div class="al">${recAtt.map(a=>{
-        const e=myEmps(d).find(x=>x.id===a.empId);
+        const e=emps.find(x=>x.id===a.user_id);
         const cls=a.status==='absent'?'r':a.status==='late'?'a':'';
+        const t=a.check_in_time?new Date(a.check_in_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'';
         return `<div class="ai"><div class="adot ${cls}"></div><div>
-          <div class="at-t">${e?.name||a.empId} — ${cap(a.status)}${a.checkIn?' at '+a.checkIn:''}</div>
-          <div class="at-tm">${fmtDate(a.date)}</div></div></div>`;
+          <div class="at-t">${e?.name||'Employee'} — ${cap(a.status)}${t?' at '+t:''}</div>
+          <div class="at-tm">${fmtDate((a.check_in_time||a.date||'').split('T')[0])}</div></div></div>`;
       }).join('')}</div>`;
 }
 
 // ══ EMPLOYEES ════════════════════════════════
 function renderEmps(){
-  const d=db(); const emps=myEmps(d);
+  const emps=myEmps(); const depts=myDepts();
   const q=(document.getElementById('empSearch')?.value||'').toLowerCase();
   const fl=emps.filter(e=>!q||e.name.toLowerCase().includes(q)||e.email.toLowerCase().includes(q));
   document.getElementById('empCnt').textContent=`(${emps.length})`;
-  if(emps.length===0){ document.getElementById('empWrap').innerHTML=empty('No employees yet','Employees appear here automatically when they register via your invite links.'); return; }
-  const depts=myDepts(d);
+  if(emps.length===0){ document.getElementById('empWrap').innerHTML=empty('No employees yet','Employees appear here automatically when they register.'); return; }
   document.getElementById('empWrap').innerHTML=`<div class="tw"><table>
-    <thead><tr><th>Employee</th><th>ID</th><th>Department</th><th>Position</th><th>Joined</th><th></th></tr></thead>
+    <thead><tr><th>Employee</th><th>Department</th><th>Email</th><th>Joined</th><th></th></tr></thead>
     <tbody>${fl.map(e=>{
-      const dep=depts.find(x=>x.id===e.deptId);
+      const dep=depts.find(x=>x.id===e.department_id);
       return `<tr>
-        <td><div class="ec"><div class="av">${initials(e.name)}</div><div><div class="en">${e.name}</div><div class="ed">${e.email}</div></div></div></td>
-        <td style="font-size:10px;color:var(--muted);font-family:monospace">${e.id}</td>
+        <td><div class="ec"><div class="av">${initials(e.name)}</div><div><div class="en">${e.name}</div></div></div></td>
         <td>${dep?.name||'—'}</td>
-        <td style="color:var(--muted)">${e.pos||'—'}</td>
-        <td style="font-size:11px;color:var(--muted)">${e.joinDate||'—'}</td>
-        <td style="display:flex;gap:5px">
-          <button class="abt" onclick="viewEmpAtt('${e.id}')">Attendance</button>
-          <button class="abt" onclick="openEditEmp('${e.id}')">Edit</button>
-        </td>
+        <td style="font-size:11px;color:var(--muted)">${e.email}</td>
+        <td style="font-size:11px;color:var(--muted)">${e.created_at?fmtDate(e.created_at.split('T')[0]):'—'}</td>
+        <td><button class="abt" onclick="viewEmpAtt(${e.id})">Attendance</button></td>
       </tr>`;
     }).join('')}</tbody></table></div>`;
 }
 
 function viewEmpAtt(empId){
-  const d=db(); const e=d.employees.find(x=>x.id===empId);
-  const att=(d.attendance||[]).filter(a=>a.empId===empId).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,15);
+  const e=myEmps().find(x=>x.id===empId);
+  const att=myAtt().filter(a=>a.user_id===empId).sort((a,b)=>(b.check_in_time||'').localeCompare(a.check_in_time||'')).slice(0,15);
   document.getElementById('detBody').innerHTML=`
     <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
-      <div style="font-size:14px;font-weight:700">${e.name}</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:2px">${e.id} · ${e.email}</div>
+      <div style="font-size:14px;font-weight:700">${e?.name||'Employee'}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">${e?.email||''}</div>
     </div>
     ${att.length===0?'<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">No records</div>':
     `<div class="tw"><table>
       <thead><tr><th>Date</th><th>In</th><th>Out</th><th>Status</th><th>Score</th></tr></thead>
-      <tbody>${att.map(a=>`<tr>
-        <td style="font-size:11px">${a.date}</td>
-        <td style="color:var(--accent);font-weight:700">${a.checkIn||'—'}</td>
-        <td style="color:var(--muted)">${a.checkOut||'—'}</td>
-        <td><span class="badge ${a.status}">${cap(a.status)}</span></td>
-        <td style="font-weight:700;font-size:11px">${a.score?a.score+'%':'—'}</td>
-      </tr>`).join('')}</tbody></table></div>`}`;
+      <tbody>${att.map(a=>{
+        const inT=a.check_in_time?new Date(a.check_in_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'—';
+        const outT=a.check_out_time?new Date(a.check_out_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'—';
+        return `<tr>
+          <td style="font-size:11px">${fmtDate((a.check_in_time||'').split('T')[0])}</td>
+          <td style="color:var(--accent);font-weight:700">${inT}</td>
+          <td style="color:var(--muted)">${outT}</td>
+          <td><span class="badge ${a.status}">${cap(a.status)}</span></td>
+          <td style="font-weight:700;font-size:11px">${a.face_match_score?Math.round(a.face_match_score)+'%':'—'}</td>
+        </tr>`;
+      }).join('')}</tbody></table></div>`}`;
   document.getElementById('detModal').classList.add('open');
 }
 
 // ══ ATTENDANCE ════════════════════════════════
 function renderAtt(){
-  const d=db(); const emps=myEmps(d); const att=myAtt(d);
+  const emps=myEmps(); const att=myAtt(); const depts=myDepts();
   const dateF=document.getElementById('attDate')?.value||'';
   const deptF=document.getElementById('attDept')?.value||'';
   let fl=att;
-  if(dateF) fl=fl.filter(a=>a.date===dateF);
-  if(deptF) fl=fl.filter(a=>emps.find(e=>e.id===a.empId&&e.deptId===deptF));
-  fl=[...fl].sort((a,b)=>b.date.localeCompare(a.date));
+  if(dateF) fl=fl.filter(a=>(a.check_in_time||a.date||'').startsWith(dateF));
+  if(deptF) fl=fl.filter(a=>emps.find(e=>e.id===a.user_id&&e.department_id==deptF));
+  fl=[...fl].sort((a,b)=>(b.check_in_time||'').localeCompare(a.check_in_time||''));
   if(fl.length===0){ document.getElementById('attWrap').innerHTML=empty('No records','No attendance records match the current filter.'); return; }
-  const depts=myDepts(d);
   document.getElementById('attWrap').innerHTML=`<div class="tw"><table>
-    <thead><tr><th>Employee</th><th>Date</th><th>In</th><th>Out</th><th>GPS</th><th>Score</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Employee</th><th>Date</th><th>In</th><th>Out</th><th>Score</th><th>Status</th><th></th></tr></thead>
     <tbody>${fl.map(a=>{
-      const e=emps.find(x=>x.id===a.empId);
-      const dep=depts.find(x=>x.id===e?.deptId);
+      const e=emps.find(x=>x.id===a.user_id);
+      const dep=depts.find(x=>x.id===e?.department_id);
+      const inT=a.check_in_time?new Date(a.check_in_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'—';
+      const outT=a.check_out_time?new Date(a.check_out_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'—';
       return `<tr>
-        <td><div class="ec"><div class="av">${initials(e?.name||'?')}</div><div><div class="en">${e?.name||a.empId}</div><div class="ed">${dep?.name||'—'}</div></div></div></td>
-        <td style="font-size:11px;color:var(--muted)">${a.date}</td>
-        <td style="color:var(--accent);font-weight:700">${a.checkIn||'—'}</td>
-        <td style="color:var(--muted)">${a.checkOut||'—'}</td>
-        <td style="font-size:11px">${a.gps||'—'}</td>
-        <td>${a.score?`<div class="sc"><div class="sb"><div class="sf" style="width:${a.score}%"></div></div><span style="font-size:10px;font-weight:700">${a.score}%</span></div>`:'—'}</td>
+        <td><div class="ec"><div class="av">${initials(e?.name||'?')}</div><div><div class="en">${e?.name||'—'}</div><div class="ed">${dep?.name||'—'}</div></div></div></td>
+        <td style="font-size:11px;color:var(--muted)">${fmtDate((a.check_in_time||'').split('T')[0])}</td>
+        <td style="color:var(--accent);font-weight:700">${inT}</td>
+        <td style="color:var(--muted)">${outT}</td>
+        <td>${a.face_match_score?`<div class="sc"><div class="sb"><div class="sf" style="width:${a.face_match_score}%"></div></div><span style="font-size:10px;font-weight:700">${Math.round(a.face_match_score)}%</span></div>`:'—'}</td>
         <td><span class="badge ${a.status}">${cap(a.status)}</span></td>
         <td><button class="abt" onclick='openDetAtt(${JSON.stringify(a).replace(/'/g,"&#39;")})'>Detail</button></td>
       </tr>`;
@@ -820,96 +740,58 @@ function renderAtt(){
 }
 
 function openDetAtt(a){
-  const d=db();
-  const e=d.employees.find(x=>x.id===a.empId);
-  const co=d.companies.find(x=>x.id===sess.companyId);
-
-  // ── Time score: % of expected work hours completed ──
-  let timeScore='—'; let timeBar='';
-  if(a.checkIn&&a.checkOut){
-    const [ih,im]=a.checkIn.split(':').map(Number);
-    const [oh,om]=a.checkOut.split(':').map(Number);
-    const workedMins=(oh*60+om)-(ih*60+im);
-    const startStr=co?.officeStart||'09:00';
-    const endStr=co?.officeEnd||'18:00';
-    const [sh,sm]=startStr.split(':').map(Number);
-    const [eh,em]=endStr.split(':').map(Number);
-    const expectedMins=(eh*60+em)-(sh*60+sm);
-    const pct=Math.min(100,Math.round((workedMins/expectedMins)*100));
-    const workedH=Math.floor(workedMins/60), workedM=workedMins%60;
-    const expH=Math.floor(expectedMins/60), expM=expectedMins%60;
-    const barColor=pct>=90?'var(--accent)':pct>=60?'#d4a444':'var(--red)';
-    timeScore=`${pct}% · ${workedH}h ${workedM}m of ${expH}h ${expM}m`;
-    timeBar=`<div class="time-score-bar"><div class="time-score-fill" style="width:${pct}%;background:${barColor}"></div></div>`;
-  }
-
-  // ── Selfie image ──
-  const selfieHtml=e?.facePhoto
-    ? `<img src="${e.facePhoto}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid var(--accent);display:block;margin:0 auto">`
-    : `<div style="font-size:32px;text-align:center">🤳</div>`;
-
+  const e=myEmps().find(x=>x.id===a.user_id);
+  const inT=a.check_in_time?new Date(a.check_in_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'—';
+  const outT=a.check_out_time?new Date(a.check_out_time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'—';
   document.getElementById('detBody').innerHTML=`
-    <div class="dr2"><span class="dr2-l">Employee</span><span class="dr2-v">${e?.name||a.empId}</span></div>
-    <div class="dr2"><span class="dr2-l">Date</span><span class="dr2-v">${fmtDate(a.date)}</span></div>
-    <div class="dr2"><span class="dr2-l">Check In</span><span class="dr2-v" style="color:var(--accent)">${a.checkIn||'—'}</span></div>
-    <div class="dr2"><span class="dr2-l">Check Out</span><span class="dr2-v">${a.checkOut||'—'}</span></div>
-    <div class="dr2"><span class="dr2-l">Time Score</span><span class="dr2-v" style="font-size:11px">${timeScore}</span></div>
-    ${timeBar?`<div style="padding:4px 0 10px">${timeBar}</div>`:''}
-    <div class="dr2"><span class="dr2-l">Face Score</span><span class="dr2-v">${a.score?a.score+'%':'—'}</span></div>
-    <div class="dr2"><span class="dr2-l">GPS</span><span class="dr2-v" style="color:var(--accent);font-size:11px">${a.gps||'—'}</span></div>
-    <div class="dr2"><span class="dr2-l">Work Type</span><span class="dr2-v">${cap(a.workType||'office')}</span></div>
-    <div class="dr2"><span class="dr2-l">Status</span><span class="dr2-v"><span class="badge ${a.status}">${cap(a.status)}</span></span></div>
-    <div style="text-align:center;padding:14px 0 4px">${selfieHtml}</div>
-    <p style="text-align:center;font-size:10px;color:var(--muted);margin-top:5px;font-weight:600">Registered face photo</p>`;
+    <div class="dr2"><span class="dr2-l">Employee</span><span class="dr2-v">${e?.name||'—'}</span></div>
+    <div class="dr2"><span class="dr2-l">Date</span><span class="dr2-v">${fmtDate((a.check_in_time||'').split('T')[0])}</span></div>
+    <div class="dr2"><span class="dr2-l">Check In</span><span class="dr2-v" style="color:var(--accent)">${inT}</span></div>
+    <div class="dr2"><span class="dr2-l">Check Out</span><span class="dr2-v">${outT}</span></div>
+    <div class="dr2"><span class="dr2-l">Face Score</span><span class="dr2-v">${a.face_match_score?Math.round(a.face_match_score)+'%':'—'}</span></div>
+    <div class="dr2"><span class="dr2-l">GPS</span><span class="dr2-v">${a.check_in_lat?a.check_in_lat+', '+a.check_in_lng:'—'}</span></div>
+    <div class="dr2"><span class="dr2-l">Work Type</span><span class="dr2-v">${cap(a.work_type||'office')}</span></div>
+    <div class="dr2"><span class="dr2-l">Status</span><span class="dr2-v"><span class="badge ${a.status}">${cap(a.status)}</span></span></div>`;
   document.getElementById('detModal').classList.add('open');
 }
 
 // ══ DEPARTMENTS ═══════════════════════════════
 function renderDepts(){
-  const d=db(); const depts=myDepts(d); const emps=myEmps(d);
-  const base=location.origin+location.pathname.replace('admin.html','')+'index.html';
+  const depts=myDepts(); const emps=myEmps();
+  const base=location.origin+'/index.html';
   document.getElementById('deptGrid').innerHTML=depts.map(dep=>{
-    const cnt=emps.filter(e=>e.deptId===dep.id).length;
-    const link=`${base}?join=${dep.id}&co=${dep.companyId}`;
+    const cnt=emps.filter(e=>e.department_id===dep.id).length;
+    const link=`${base}?join=${dep.id}&co=${sess.id}`;
     return `<div class="dcard">
       <div class="dcard-n">${dep.name}</div>
       <div class="dcard-m">${cnt} employee${cnt!==1?'s':''} enrolled</div>
       <div class="dcard-link">${link}</div>
       <div class="dcard-btns">
         <button class="btn sm primary" onclick="copyLink('${link}',this)" style="flex:1">Copy Link</button>
-        <button class="btn sm" onclick="deleteDept('${dep.id}','${dep.name}')">Remove</button>
+        <button class="btn sm" onclick="deleteDept(${dep.id},'${dep.name}')">Remove</button>
       </div>
     </div>`;
   }).join('')||'<div style="font-size:12px;color:var(--muted);padding:10px 0">No departments yet. Add one below.</div>';
 }
 
-function addDept(){
+async function addDept(){
   const name=document.getElementById('newDeptName').value.trim();
   if(!name){alert('Enter a name.');return;}
-  const d=db();
-  d.departments.push({id:'DEPT-'+Date.now(),name,companyId:sess.companyId,createdAt:new Date().toISOString()});
-  save(d); document.getElementById('newDeptName').value='';
-  renderDepts(); toast('"'+name+'" department created.');
+  try{
+    await apiFetch('/api/departments',{method:'POST',body:JSON.stringify({name})});
+    document.getElementById('newDeptName').value='';
+    await loadAllData(); renderDepts(); populateAttDeptFilter();
+    toast('"'+name+'" department created.');
+  }catch(e){ alert(e.message); }
 }
 
-function deleteDept(id,name){
-  const d=db();
-  if((d.employees||[]).some(e=>e.deptId===id)){alert('Cannot remove: employees are enrolled.');return;}
+async function deleteDept(id,name){
   if(!confirm('Remove "'+name+'"?'))return;
-  d.departments=(d.departments||[]).filter(x=>x.id!==id); save(d); renderDepts(); toast('Removed.');
-}
-
-function copyCoCode(){
-  const code = sess.companyId;
-  navigator.clipboard.writeText(code).then(()=>{
-    const btn = document.getElementById('coCodeCopyBtn');
-    const hint = document.getElementById('coCodeCopied');
-    const orig = btn.textContent;
-    btn.textContent = '✓ Copied!';
-    if(hint) hint.style.display='block';
-    setTimeout(()=>{ btn.textContent=orig; if(hint) hint.style.display='none'; }, 2000);
-    toast('Company Code copied to clipboard!');
-  }).catch(()=>{ prompt('Your Company Code (share with employees):', code); });
+  try{
+    await apiFetch('/api/departments/'+id,{method:'DELETE'});
+    await loadAllData(); renderDepts();
+    toast('Removed.');
+  }catch(e){ alert(e.message); }
 }
 
 function copyLink(link,btn){
@@ -918,179 +800,421 @@ function copyLink(link,btn){
 
 function populateAttDeptFilter(){
   const sel=document.getElementById('attDept'); if(!sel)return;
-  const d=db(); const cur=sel.value;
-  sel.innerHTML='<option value="">All Depts</option>'+(myDepts(d).map(dep=>`<option value="${dep.id}"${dep.id===cur?' selected':''}>${dep.name}</option>`).join(''));
+  const cur=sel.value;
+  sel.innerHTML='<option value="">All Depts</option>'+(myDepts().map(dep=>`<option value="${dep.id}"${dep.id==cur?' selected':''}>${dep.name}</option>`).join(''));
 }
 
 // ══ REPORTS ═══════════════════════════════════
 function renderReports(){
-  const d=db(); const emps=myEmps(d); const att=myAtt(d);
-  const co=d.companies.find(x=>x.id===sess.companyId);
-  const startStr=co?.officeStart||'09:00'; const endStr=co?.officeEnd||'18:00';
-  const [sh,sm]=startStr.split(':').map(Number); const [eh,em]=endStr.split(':').map(Number);
-  const expectedMins=(eh*60+em)-(sh*60+sm);
+  const emps=myEmps(); const att=myAtt(); const depts=myDepts();
   const m=new Date().getMonth()+1; const y=new Date().getFullYear();
-  const mAtt=att.filter(a=>{const dt=new Date(a.date);return dt.getMonth()+1===m&&dt.getFullYear()===y;});
+  const mAtt=att.filter(a=>{
+    const d=new Date(a.check_in_time||a.date||'');
+    return d.getMonth()+1===m&&d.getFullYear()===y;
+  });
   document.getElementById('repNums').innerHTML=`
     <div class="rn"><div class="rn-n">${emps.length}</div><div class="rn-l">Employees</div></div>
     <div class="rn"><div class="rn-n g">${mAtt.filter(a=>a.status==='present').length}</div><div class="rn-l">Present</div></div>
     <div class="rn"><div class="rn-n a">${mAtt.filter(a=>a.status==='late').length}</div><div class="rn-l">Late</div></div>
-    <div class="rn"><div class="rn-n r">${mAtt.filter(a=>a.status==='absent').length}</div><div class="rn-l">Absent</div></div>
-    <div class="rn"><div class="rn-n" style="font-size:13px">${startStr}–${endStr}</div><div class="rn-l">Work Hours</div></div>`;
-  if(emps.length===0){document.getElementById('repWrap').innerHTML=empty('No data','Reports populate once employees join.');return;}
-  const depts=myDepts(d);
+    <div class="rn"><div class="rn-n r">${mAtt.filter(a=>a.status==='absent').length}</div><div class="rn-l">Absent</div></div>`;
+  if(emps.length===0){document.getElementById('repWrap').innerHTML=empty('No data','Reports populate once employees register and check in.');return;}
   document.getElementById('repWrap').innerHTML=`<div class="tw"><table>
-    <thead><tr><th>Employee</th><th>Present</th><th>Late</th><th>Absent</th><th>Avg Hours/Day</th><th>Time Score</th><th>Att. Rate</th></tr></thead>
+    <thead><tr><th>Employee</th><th>Present</th><th>Late</th><th>Absent</th><th>Rate</th></tr></thead>
     <tbody>${emps.map(e=>{
-      const eA=mAtt.filter(a=>a.empId===e.id);
-      const pr=eA.filter(a=>a.status==='present').length;
+      const eA=mAtt.filter(a=>a.user_id===e.id);
+      const p=eA.filter(a=>a.status==='present').length;
       const l=eA.filter(a=>a.status==='late').length;
       const ab=eA.filter(a=>a.status==='absent').length;
-      let totalMins=0, daysWithBoth=0;
-      eA.forEach(a=>{
-        if(a.checkIn&&a.checkOut){
-          const [ih,im]=a.checkIn.split(':').map(Number);const[oh,om]=a.checkOut.split(':').map(Number);
-          totalMins+=(oh*60+om)-(ih*60+im); daysWithBoth++;
-        }
-      });
-      const avgMins=daysWithBoth>0?Math.round(totalMins/daysWithBoth):0;
-      const avgH=Math.floor(avgMins/60), avgM=avgMins%60;
-      // Time score: avg worked / expected * 100
-      const timeScore=expectedMins>0&&daysWithBoth>0?Math.min(100,Math.round((avgMins/expectedMins)*100)):0;
-      const tsColor=timeScore>=90?'var(--accent)':timeScore>=60?'#d4a444':'var(--red)';
-      const rate=eA.length>0?Math.round(((pr+l)/eA.length)*100):0;
-      const dep=depts.find(x=>x.id===e.deptId);
+      const rate=eA.length>0?Math.round(((p+l)/eA.length)*100):0;
+      const dep=depts.find(x=>x.id===e.department_id);
       return `<tr>
         <td><div class="ec"><div class="av">${initials(e.name)}</div><div><div class="en">${e.name}</div><div class="ed">${dep?.name||'—'}</div></div></div></td>
-        <td style="font-weight:700;color:var(--accent)">${pr}</td>
+        <td style="font-weight:700;color:var(--accent)">${p}</td>
         <td style="color:var(--amber)">${l}</td>
         <td style="color:var(--red)">${ab}</td>
-        <td style="font-size:11px;color:var(--muted)">${daysWithBoth>0?avgH+'h '+avgM+'m':'—'}</td>
-        <td>
-          <div class="sc">
-            <div class="sb"><div class="sf" style="width:${timeScore}%;background:${tsColor}"></div></div>
-            <span style="font-size:10px;font-weight:700;color:${tsColor}">${daysWithBoth>0?timeScore+'%':'—'}</span>
-          </div>
-        </td>
         <td><div class="sc"><div class="sb"><div class="sf" style="width:${rate}%;background:${rate>=90?'var(--accent)':rate>=75?'#d4a444':'var(--red)'}"></div></div><span style="font-size:10px;font-weight:700">${rate}%</span></div></td>
       </tr>`;
     }).join('')}</tbody></table></div>`;
 }
 
-// ══ SETTINGS ════════════════════════════════
-function loadSettings(){
-  const d=db();
-  const co=d.companies.find(x=>x.id===sess.companyId);
-  const ad=d.admins.find(x=>x.id===sess.id);
-  document.getElementById('setCompanyName').value=co?.name||'';
-  document.getElementById('setStartTime').value=co?.officeStart||'09:00';
-  document.getElementById('setEndTime').value=co?.officeEnd||'18:00';
-  document.getElementById('setGrace').value=co?.graceMins??15;
-  document.getElementById('setAdminName').value=ad?.name||'';
-}
-function saveCompanyName(){
-  const name=document.getElementById('setCompanyName').value.trim();
-  if(!name){toast('Enter a company name.');return;}
-  const d=db(); const co=d.companies.find(x=>x.id===sess.companyId);
-  if(co){co.name=name;save(d);document.getElementById('sbCompany').textContent=name;toast('Company name updated.');}
-}
-function saveWorkHours(){
-  const start=document.getElementById('setStartTime').value;
-  const end=document.getElementById('setEndTime').value;
-  const grace=parseInt(document.getElementById('setGrace').value)||15;
-  if(!start||!end){toast('Enter valid times.');return;}
-  const d=db(); const co=d.companies.find(x=>x.id===sess.companyId);
-  if(co){co.officeStart=start;co.officeEnd=end;co.graceMins=grace;save(d);}
-  const ok=document.getElementById('setOk');
-  ok.style.display='inline';setTimeout(()=>ok.style.display='none',2500);
-  toast('Work hours saved — Start: '+start+', End: '+end+', Grace: '+grace+'min');
-}
-function saveAdminName(){
-  const name=document.getElementById('setAdminName').value.trim();
-  if(!name){toast('Enter a name.');return;}
-  const d=db(); const ad=d.admins.find(x=>x.id===sess.id);
-  if(ad){ad.name=name;save(d);document.getElementById('sbName').textContent=name;toast('Name updated.');}
-}
-function changeAdminPw(){
-  const oldPw=document.getElementById('setOldPw').value;
-  const newPw=document.getElementById('setNewPw').value;
-  const errEl=document.getElementById('setPwErr');
-  errEl.style.display='none';
-  if(!oldPw||!newPw){errEl.textContent='Fill both fields.';errEl.style.display='block';return;}
-  if(newPw.length<6){errEl.textContent='New password must be 6+ characters.';errEl.style.display='block';return;}
-  const d=db(); const ad=d.admins.find(x=>x.id===sess.id);
-  if(!ad||ad.pw!==oldPw){errEl.textContent='Current password is incorrect.';errEl.style.display='block';return;}
-  ad.pw=newPw; save(d);
-  document.getElementById('setOldPw').value='';
-  document.getElementById('setNewPw').value='';
-  toast('Password changed successfully.');
+document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open')}));
+</script>
+</body>
+</html>
+<script>
+// ═══════════════════════════════════════════
+//  API CONFIG
+// ═══════════════════════════════════════════
+const API = 'https://attendance-app-at.up.railway.app';
+
+async function apiFetch(path, options={}){
+  const token = sessionStorage.getItem('token');
+  const headers = {
+    'Content-Type':'application/json',
+    ...(token ? {Authorization:'Bearer '+token} : {}),
+    ...(options.headers||{})
+  };
+  const res = await fetch(API+path, {...options, headers});
+  const data = await res.json();
+  if(!res.ok) throw new Error(data.error||'Request failed');
+  return data;
 }
 
-// ══ EDIT EMPLOYEE ════════════════════════════
-let editingEmpId=null;
-function openEditEmp(empId){
-  const d=db(); const e=d.employees.find(x=>x.id===empId);
-  if(!e)return;
-  editingEmpId=empId;
-  document.getElementById('editEmpName').value=e.name||'';
-  document.getElementById('editEmpPos').value=e.pos||'';
-  document.getElementById('editEmpPhone').value=e.phone||'';
-  // Populate dept select
-  const depts=myDepts(d);
-  document.getElementById('editEmpDept').innerHTML=depts.map(dep=>
-    `<option value="${dep.id}"${dep.id===e.deptId?' selected':''}>${dep.name}</option>`).join('');
-  document.getElementById('editEmpErr').style.display='none';
-  document.getElementById('editEmpModal').classList.add('open');
-}
-function saveEditEmp(){
-  const name=document.getElementById('editEmpName').value.trim();
-  const pos=document.getElementById('editEmpPos').value.trim();
-  const phone=document.getElementById('editEmpPhone').value.trim();
-  const deptId=document.getElementById('editEmpDept').value;
-  const errEl=document.getElementById('editEmpErr');
-  if(!name){errEl.textContent='Name is required.';errEl.style.display='block';return;}
-  const d=db(); const e=d.employees.find(x=>x.id===editingEmpId);
-  if(!e)return;
-  e.name=name; e.pos=pos; e.phone=phone; e.deptId=deptId;
-  save(d); closeM('editEmpModal'); renderEmps();
-  toast(name+' profile updated.');
+// ── Auth ──
+const sess = JSON.parse(sessionStorage.getItem('at_session')||'null');
+if(!sess||sess.role!=='admin'){ location.href='index.html'; }
+
+let adminData = null;
+let allDepts = [], allEmps = [], allAtt = [];
+
+document.addEventListener('DOMContentLoaded', async ()=>{
+  adminData = sess;
+  document.getElementById('sbAv').textContent  = initials(sess.name);
+  document.getElementById('sbName').textContent = sess.name;
+  document.getElementById('pgDate').textContent = new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  document.getElementById('attDate').value = today();
+
+  try{
+    const me = await apiFetch('/api/auth/me');
+    document.getElementById('sbCompany').textContent = me.user.department_name || 'Admin Panel';
+  }catch(e){}
+
+  await loadAllData();
+  document.getElementById('wizardOverlay').style.display='none';
+  refreshAll();
+  populateAttDeptFilter();
+});
+
+async function loadAllData(){
+  try{
+    const [deptRes, empRes, attRes] = await Promise.all([
+      apiFetch('/api/auth/departments'),
+      apiFetch('/api/attendance?limit=500'),
+      apiFetch('/api/attendance?limit=500')
+    ]);
+    allDepts = deptRes.departments || [];
+    allEmps  = empRes.employees   || [];
+    allAtt   = attRes.data        || [];
+  }catch(e){ console.warn('Data load error:',e.message); }
 }
 
-// ══ EXPORT CSV ══════════════════════════════
-function exportCSV(){
-  const d=db(); const emps=myEmps(d); const att=myAtt(d); const depts=myDepts(d);
-  const co=d.companies.find(x=>x.id===sess.companyId);
-  const rows=[['Employee','ID','Department','Date','Check In','Check Out','Hours','Status','Face Score','GPS','Work Type']];
-  att.forEach(a=>{
-    const e=emps.find(x=>x.id===a.empId);
-    const dep=depts.find(x=>x.id===e?.deptId);
-    let hrs='';
-    if(a.checkIn&&a.checkOut){
-      const [ih,im]=a.checkIn.split(':').map(Number);
-      const [oh,om]=a.checkOut.split(':').map(Number);
-      const t=(oh*60+om)-(ih*60+im);
-      hrs=Math.floor(t/60)+'h '+t%60+'m';
+function logout(){ sessionStorage.clear(); location.href='index.html'; }
+function openWizard(){
+  document.getElementById('wizardOverlay').style.display='flex';
+  wizStep=1; updateWizUI();
+}
+
+// ══ WIZARD ══════════════════════════════════
+let wizStep = 1;
+const WIZARD_STEPS = 3;
+let pendingDepts = [];
+
+function updateWizUI(){
+  for(let i=1;i<=WIZARD_STEPS;i++){
+    const ws=document.getElementById('ws'+i);
+    const wp=document.getElementById('wp'+i);
+    ws.className='wiz-step'+(i===wizStep?' active':i<wizStep?' done':'');
+    wp.className='wiz-panel'+(i===wizStep?' on':'');
+  }
+  document.getElementById('wizBack').style.visibility=wizStep>1?'visible':'hidden';
+  const nextBtn=document.getElementById('wizNext');
+  nextBtn.textContent=wizStep<WIZARD_STEPS?'Next →':'Finish Setup';
+  if(wizStep===3) buildInviteList();
+}
+
+async function wizNext(){
+  if(wizStep===1){
+    const name=document.getElementById('wizCompany').value.trim();
+    if(!name){showE('wizErr1','Enter company name.');return;}
+    wizStep=2; updateWizUI(); renderDeptChips(); return;
+  }
+  if(wizStep===2){
+    if(pendingDepts.length===0){showE('wizErr2','Add at least one department.');return;}
+    // Save departments via API
+    for(const name of pendingDepts){
+      try{ await apiFetch('/api/auth/departments',{method:'POST',body:JSON.stringify({name})}); }
+      catch(e){ console.warn('Dept exists:',name); }
     }
-    rows.push([e?.name||'',a.empId,dep?.name||'',a.date,a.checkIn||'',a.checkOut||'',hrs,a.status||'',a.score?a.score+'%':'',a.gps||'',a.workType||'']);
-  });
-  const csv=rows.map(r=>r.map(v=>'"'+(v+'').replace(/"/g,'""')+'"').join(',')).join('\n');
-  const a=document.createElement('a');
-  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
-  a.download='attendance_'+today()+'.csv';
-  a.click();
-  toast('CSV exported.');
+    await loadAllData();
+    wizStep=3; updateWizUI(); return;
+  }
+  if(wizStep===3){
+    document.getElementById('wizardOverlay').style.display='none';
+    refreshAll();
+  }
+}
+function wizPrev(){ if(wizStep>1){wizStep--;updateWizUI();if(wizStep===2)renderDeptChips();} }
+
+function renderDeptChips(){
+  pendingDepts = [...new Set([...allDepts.map(x=>x.name),...pendingDepts])];
+  document.getElementById('deptChips').innerHTML=pendingDepts.map(n=>`
+    <div class="dept-chip">${n}<button onclick="removePendingDept('${n}')">×</button></div>`).join('');
+}
+function addWizDept(){
+  const inp=document.getElementById('newDeptInput');
+  const name=inp.value.trim();
+  if(!name)return;
+  if(!pendingDepts.includes(name)) pendingDepts.push(name);
+  inp.value=''; renderDeptChips();
+}
+function removePendingDept(n){ pendingDepts=pendingDepts.filter(x=>x!==n); renderDeptChips(); }
+
+function buildInviteList(){
+  const base=location.origin+location.pathname.replace('admin.html','')+'index.html';
+  document.getElementById('inviteList').innerHTML=allDepts.map((dep,i)=>{
+    const link=`${base}?join=${dep.id}&co=${sess.id}`;
+    return `<div class="invite-item">
+      <div class="invite-dept">${dep.name}</div>
+      <div class="invite-link-row">
+        <div class="invite-link">${link}</div>
+        <button class="copy-btn" onclick="copyLink('${link}',this)">Copy</button>
+      </div></div>`;
+  }).join('')||'<div style="font-size:12px;color:var(--muted);padding:10px 0">No departments yet.</div>';
 }
 
-// ══ HELPERS (add refreshAll settings) ═══════
+// ══ MAIN SECTIONS ════════════════════════════
+function refreshAll(){ renderDashboard(); renderEmps(); renderAtt(); renderDepts(); renderReports(); }
 
-function myEmps(d){ return (d.employees||[]).filter(e=>e.companyId===sess.companyId); }
-function myAtt(d){ const ids=myEmps(d).map(e=>e.id); return (d.attendance||[]).filter(a=>ids.includes(a.empId)); }
-function myDepts(d){ return (d.departments||[]).filter(x=>x.companyId===sess.companyId); }
+const titles={dashboard:'Dashboard',employees:'Employees',attendance:'Attendance Records',departments:'Departments',reports:'Reports',settings:'Settings'};
+function nav(name,el){
+  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('on'));
+  document.getElementById('sec-'+name).classList.add('on');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  if(el) el.classList.add('active');
+  document.getElementById('pgTitle').textContent=titles[name]||name;
+  if(name==='dashboard') renderDashboard();
+  if(name==='employees') renderEmps();
+  if(name==='attendance') renderAtt();
+  if(name==='departments') renderDepts();
+  if(name==='reports') renderReports();
+}
+
+// ══ DASHBOARD ════════════════════════════════
+async function renderDashboard(){
+  try{
+    // Refresh data
+    const [attRes, empRes] = await Promise.all([
+      apiFetch('/api/attendance?date='+today()),
+      apiFetch('/api/attendance/employees')
+    ]);
+    allAtt  = attRes.data || [];
+    allEmps = empRes.data || [];
+  }catch(e){}
+
+  const todayAtt = allAtt.filter(a=>a.date===today());
+  const present  = todayAtt.filter(a=>a.status==='present'||a.status==='wfh').length;
+  const late     = todayAtt.filter(a=>a.status==='late').length;
+  const absent   = Math.max(0, allEmps.length - todayAtt.length);
+
+  document.getElementById('dashStats').innerHTML=`
+    <div class="stat"><div class="stat-n">${allEmps.length}</div><div class="stat-l">Total Employees</div></div>
+    <div class="stat"><div class="stat-n g">${present}</div><div class="stat-l">Present Today</div></div>
+    <div class="stat"><div class="stat-n a">${late}</div><div class="stat-l">Late Today</div></div>
+    <div class="stat"><div class="stat-n r">${absent}</div><div class="stat-l">Absent Today</div></div>`;
+
+  if(allEmps.length===0){
+    document.getElementById('dashToday').innerHTML=empty('No employees yet','Employees appear after they register via your invite links.');
+  } else {
+    document.getElementById('dashToday').innerHTML=`<div class="tw"><table>
+      <thead><tr><th>Employee</th><th>In</th><th>Status</th></tr></thead>
+      <tbody>${allEmps.slice(0,10).map(e=>{
+        const a=todayAtt.find(x=>x.user_id===e.id);
+        return `<tr>
+          <td><div class="ec"><div class="av">${initials(e.name)}</div><div><div class="en">${e.name}</div><div class="ed">${e.department_name||'—'}</div></div></div></td>
+          <td style="color:${a?'var(--accent)':'var(--muted)'};">${a?.check_in_time?fmtTime(a.check_in_time):'—'}</td>
+          <td><span class="badge ${a?a.status:'absent'}">${cap(a?a.status:'Absent')}</span></td>
+        </tr>`;
+      }).join('')}</tbody></table></div>`;
+  }
+
+  document.getElementById('dashDepts').innerHTML=allDepts.length===0
+    ? empty('No departments','Create departments and share invite links.')
+    : allDepts.map(dep=>{
+        const cnt=allEmps.filter(e=>e.department_id===dep.id).length;
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--off)">
+          <div><div style="font-size:12px;font-weight:700">${dep.name}</div><div style="font-size:10px;color:var(--muted)">${cnt} employee${cnt!==1?'s':''}</div></div>
+        </div>`;
+      }).join('');
+
+  document.getElementById('dashActivity').innerHTML=allAtt.slice(0,5).map(a=>{
+    const cls=a.status==='absent'?'r':a.status==='late'?'a':'';
+    return `<div class="ai"><div class="adot ${cls}"></div><div>
+      <div class="at-t">${a.user_name||a.user_id} — ${cap(a.status)}${a.check_in_time?' at '+fmtTime(a.check_in_time):''}</div>
+      <div class="at-tm">${fmtDate(a.date)}</div></div></div>`;
+  }).join('') || empty('No activity yet','Attendance events appear here.');
+}
+
+// ══ EMPLOYEES ════════════════════════════════
+async function renderEmps(){
+  try{
+    const res=await apiFetch('/api/attendance/employees');
+    allEmps=res.data||[];
+  }catch(e){}
+  const q=(document.getElementById('empSearch')?.value||'').toLowerCase();
+  const fl=allEmps.filter(e=>!q||e.name.toLowerCase().includes(q)||e.email.toLowerCase().includes(q));
+  document.getElementById('empCnt').textContent=`(${allEmps.length})`;
+  if(allEmps.length===0){document.getElementById('empWrap').innerHTML=empty('No employees yet','Employees appear after registering via your invite links.');return;}
+  document.getElementById('empWrap').innerHTML=`<div class="tw"><table>
+    <thead><tr><th>Employee</th><th>Email</th><th>Department</th><th>Joined</th><th></th></tr></thead>
+    <tbody>${fl.map(e=>`<tr>
+      <td><div class="ec"><div class="av">${initials(e.name)}</div><div><div class="en">${e.name}</div></div></div></td>
+      <td style="font-size:11px;color:var(--muted)">${e.email}</td>
+      <td>${e.department_name||'—'}</td>
+      <td style="font-size:11px;color:var(--muted)">${e.created_at?e.created_at.split('T')[0]:'—'}</td>
+      <td><button class="abt" onclick="viewEmpAtt(${e.id})">Attendance</button></td>
+    </tr>`).join('')}</tbody></table></div>`;
+}
+
+async function viewEmpAtt(empId){
+  try{
+    const res=await apiFetch('/api/attendance?user_id='+empId+'&limit=20');
+    const att=res.data||[];
+    const e=allEmps.find(x=>x.id===empId);
+    document.getElementById('detBody').innerHTML=`
+      <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+        <div style="font-size:14px;font-weight:700">${e?.name||'Employee'}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${e?.email||''}</div>
+      </div>
+      ${att.length===0?'<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">No records</div>':
+      `<div class="tw"><table>
+        <thead><tr><th>Date</th><th>In</th><th>Out</th><th>Status</th></tr></thead>
+        <tbody>${att.map(a=>`<tr>
+          <td style="font-size:11px">${a.date}</td>
+          <td style="color:var(--accent);font-weight:700">${a.check_in_time?fmtTime(a.check_in_time):'—'}</td>
+          <td style="color:var(--muted)">${a.check_out_time?fmtTime(a.check_out_time):'—'}</td>
+          <td><span class="badge ${a.status}">${cap(a.status)}</span></td>
+        </tr>`).join('')}</tbody></table></div>`}`;
+    document.getElementById('detModal').classList.add('open');
+  }catch(e){ toast('Failed to load attendance.'); }
+}
+
+// ══ ATTENDANCE ════════════════════════════════
+async function renderAtt(){
+  try{
+    let url='/api/attendance?limit=200';
+    const dateF=document.getElementById('attDate')?.value||'';
+    const deptF=document.getElementById('attDept')?.value||'';
+    if(dateF) url+=`&date=${dateF}`;
+    if(deptF) url+=`&dept_id=${deptF}`;
+    const res=await apiFetch(url);
+    allAtt=res.data||[];
+  }catch(e){}
+
+  if(allAtt.length===0){document.getElementById('attWrap').innerHTML=empty('No records','No attendance records match the current filter.');return;}
+  document.getElementById('attWrap').innerHTML=`<div class="tw"><table>
+    <thead><tr><th>Employee</th><th>Date</th><th>In</th><th>Out</th><th>Status</th><th></th></tr></thead>
+    <tbody>${allAtt.map(a=>`<tr>
+      <td><div class="ec"><div class="av">${initials(a.user_name||'?')}</div><div><div class="en">${a.user_name||a.user_id}</div><div class="ed">${a.department_name||'—'}</div></div></div></td>
+      <td style="font-size:11px;color:var(--muted)">${a.date}</td>
+      <td style="color:var(--accent);font-weight:700">${a.check_in_time?fmtTime(a.check_in_time):'—'}</td>
+      <td style="color:var(--muted)">${a.check_out_time?fmtTime(a.check_out_time):'—'}</td>
+      <td><span class="badge ${a.status}">${cap(a.status)}</span></td>
+      <td><button class="abt" onclick='openDetAtt(${JSON.stringify(a).replace(/'/g,"&#39;")})'>Detail</button></td>
+    </tr>`).join('')}</tbody></table></div>`;
+}
+
+function openDetAtt(a){
+  document.getElementById('detBody').innerHTML=`
+    <div class="dr2"><span class="dr2-l">Employee</span><span class="dr2-v">${a.user_name||a.user_id}</span></div>
+    <div class="dr2"><span class="dr2-l">Date</span><span class="dr2-v">${fmtDate(a.date)}</span></div>
+    <div class="dr2"><span class="dr2-l">Check In</span><span class="dr2-v" style="color:var(--accent)">${a.check_in_time?fmtTime(a.check_in_time):'—'}</span></div>
+    <div class="dr2"><span class="dr2-l">Check Out</span><span class="dr2-v">${a.check_out_time?fmtTime(a.check_out_time):'—'}</span></div>
+    <div class="dr2"><span class="dr2-l">Face Score</span><span class="dr2-v">${a.face_match_score?a.face_match_score+'%':'—'}</span></div>
+    <div class="dr2"><span class="dr2-l">GPS</span><span class="dr2-v">${a.check_in_lat?a.check_in_lat+'° N, '+a.check_in_lng+'° E':'—'}</span></div>
+    <div class="dr2"><span class="dr2-l">Work Type</span><span class="dr2-v">${cap(a.work_type||'Office')}</span></div>
+    <div class="dr2"><span class="dr2-l">Status</span><span class="dr2-v"><span class="badge ${a.status}">${cap(a.status)}</span></span></div>`;
+  document.getElementById('detModal').classList.add('open');
+}
+
+// ══ DEPARTMENTS ═══════════════════════════════
+async function renderDepts(){
+  try{
+    const res=await apiFetch('/api/auth/departments');
+    allDepts=res.departments||[];
+  }catch(e){}
+  const base=location.origin+location.pathname.replace('admin.html','')+'index.html';
+  document.getElementById('deptGrid').innerHTML=allDepts.map(dep=>{
+    const cnt=allEmps.filter(e=>e.department_id===dep.id).length;
+    const link=`${base}?join=${dep.id}&co=${sess.id}`;
+    return `<div class="dcard">
+      <div class="dcard-n">${dep.name}</div>
+      <div class="dcard-m">${cnt} employee${cnt!==1?'s':''} enrolled</div>
+      <div class="dcard-link">${link}</div>
+      <div class="dcard-btns">
+        <button class="btn sm primary" onclick="copyLink('${link}',this)" style="flex:1">Copy Link</button>
+        <button class="btn sm" onclick="deleteDept(${dep.id},'${dep.name}')">Remove</button>
+      </div></div>`;
+  }).join('')||'<div style="font-size:12px;color:var(--muted);padding:10px 0">No departments yet.</div>';
+}
+
+async function addDept(){
+  const name=document.getElementById('newDeptName').value.trim();
+  if(!name){alert('Enter a name.');return;}
+  try{
+    await apiFetch('/api/auth/departments',{method:'POST',body:JSON.stringify({name})});
+    document.getElementById('newDeptName').value='';
+    await renderDepts();
+    toast('"'+name+'" department created.');
+  }catch(e){ toast('Error: '+e.message); }
+}
+
+async function deleteDept(id,name){
+  if(!confirm('Remove "'+name+'"?'))return;
+  try{
+    await apiFetch('/api/auth/departments/'+id,{method:'DELETE'});
+    await renderDepts();
+    toast('Removed.');
+  }catch(e){ alert(e.message); }
+}
+
+function copyLink(link,btn){
+  navigator.clipboard.writeText(link).then(()=>{const t=btn.textContent;btn.textContent='Copied!';setTimeout(()=>btn.textContent=t,2000);}).catch(()=>prompt('Copy:',link));
+}
+
+async function populateAttDeptFilter(){
+  try{
+    const res=await apiFetch('/api/auth/departments');
+    allDepts=res.departments||[];
+  }catch(e){}
+  const sel=document.getElementById('attDept');if(!sel)return;
+  const cur=sel.value;
+  sel.innerHTML='<option value="">All Depts</option>'+allDepts.map(dep=>`<option value="${dep.id}"${dep.id==cur?' selected':''}>${dep.name}</option>`).join('');
+}
+
+// ══ REPORTS ═══════════════════════════════════
+async function renderReports(){
+  try{
+    const m=new Date().getMonth()+1, y=new Date().getFullYear();
+    const res=await apiFetch(`/api/reports/monthly?month=${m}&year=${y}`);
+    const rows=res.data||[];
+    const summary=res.summary||{};
+
+    document.getElementById('repNums').innerHTML=`
+      <div class="rn"><div class="rn-n">${summary.total_employees||0}</div><div class="rn-l">Employees</div></div>
+      <div class="rn"><div class="rn-n g">${rows.reduce((s,r)=>s+(r.days_present||0),0)}</div><div class="rn-l">Present Days</div></div>
+      <div class="rn"><div class="rn-n a">${rows.reduce((s,r)=>s+(r.days_late||0),0)}</div><div class="rn-l">Late Days</div></div>
+      <div class="rn"><div class="rn-n r">${rows.reduce((s,r)=>s+(r.days_absent||0),0)}</div><div class="rn-l">Absent Days</div></div>`;
+
+    if(rows.length===0){document.getElementById('repWrap').innerHTML=empty('No data','Reports populate once employees join.');return;}
+    document.getElementById('repWrap').innerHTML=`<div class="tw"><table>
+      <thead><tr><th>Employee</th><th>Present</th><th>Late</th><th>Absent</th><th>Hours</th><th>Rate</th></tr></thead>
+      <tbody>${rows.map(e=>`<tr>
+        <td><div class="ec"><div class="av">${initials(e.employee_name)}</div><div><div class="en">${e.employee_name}</div><div class="ed">${e.department_name||'—'}</div></div></div></td>
+        <td style="font-weight:700;color:var(--accent)">${e.days_present||0}</td>
+        <td style="color:var(--amber)">${e.days_late||0}</td>
+        <td style="color:var(--red)">${e.days_absent||0}</td>
+        <td style="color:var(--muted);font-size:11px">${e.total_hours||0}h</td>
+        <td><div class="sc"><div class="sb"><div class="sf" style="width:${e.attendance_rate||0}%"></div></div><span style="font-size:10px;font-weight:700">${e.attendance_rate||0}%</span></div></td>
+      </tr>`).join('')}</tbody></table></div>`;
+  }catch(e){ document.getElementById('repWrap').innerHTML=empty('Error loading reports',e.message); }
+}
+
+// ══ HELPERS ═══════════════════════════════════
 function today(){ return new Date().toISOString().split('T')[0]; }
 function initials(n){ return n?n.split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase():'?'; }
 function cap(s){ return s?s.charAt(0).toUpperCase()+s.slice(1):''; }
 function fmtDate(d){ return d?new Date(d+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'—'; }
-function last5WorkDays(){ const days=[];const d=new Date();let n=0;while(n<5){if(d.getDay()!==0&&d.getDay()!==6){days.unshift({str:d.toISOString().split('T')[0],label:['Su','Mo','Tu','We','Th','Fr','Sa'][d.getDay()]});n++;}d.setDate(d.getDate()-1);}return days; }
+function fmtTime(dt){ if(!dt)return'—'; try{return new Date(dt).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});}catch(e){return dt;} }
 function empty(t,s){ return `<div class="empty"><div class="empty-icon">○</div><div class="empty-t">${t}</div><div class="empty-s">${s}</div></div>`; }
 function closeM(id){ document.getElementById(id).classList.remove('open'); }
 function showE(id,msg){ const el=document.getElementById(id);el.textContent=msg;el.style.display='block';setTimeout(()=>el.style.display='none',4000); }

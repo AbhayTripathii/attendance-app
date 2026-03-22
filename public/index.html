@@ -374,16 +374,18 @@
 <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 // ══════════════════════════════════════
-//  DB helpers (localStorage)
+//  API CONFIG — points to Railway backend
 // ══════════════════════════════════════
-const DB_KEY = 'at_db';
-function getDB(){try{return JSON.parse(localStorage.getItem(DB_KEY))||null}catch(e){return null}}
-function saveDB(d){localStorage.setItem(DB_KEY,JSON.stringify(d))}
-function freshDB(){
-  const d={companies:[],admins:[],departments:[],employees:[],attendance:[]};
-  saveDB(d);return d;
+const API = 'https://attendance-app-at.up.railway.app';
+
+async function apiFetch(path, options={}){
+  const token=sessionStorage.getItem('token');
+  const headers={'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{}),...(options.headers||{})};
+  const res=await fetch(API+path,{...options,headers});
+  const data=await res.json();
+  if(!res.ok) throw new Error(data.error||'Request failed');
+  return data;
 }
-function db(){return getDB()||freshDB();}
 
 // ══════════════════════════════════════
 //  face-api.js model loading
@@ -420,26 +422,33 @@ let loginRole='admin', regRole='admin';
 let regFaceBase64=null, regFaceDescriptor=null;
 let regStream=null, regQualityTimer=null, regDetectionTimer=null;
 let lockedCompanyId='';
+let lockedDeptName='';
 
-window.addEventListener('DOMContentLoaded',()=>{
+window.addEventListener('DOMContentLoaded',async()=>{
   if(joinDeptId){
     switchMode('register');
     setRegRole('employee');
     document.getElementById('reg-role-row-a') && (document.getElementById('reg-role-row-a').style.display='none');
     document.getElementById('reg-role-row-e') && (document.getElementById('reg-role-row-e').style.display='none');
-    document.getElementById('companyLookupBlock').style.display='none';
-    const d=db();
-    const dept=(d.departments||[]).find(x=>x.id===joinDeptId);
-    const co=(d.companies||[]).find(x=>x.id===joinCoId);
-    if(dept&&co){
-      lockedCompanyId=co.id;
-      document.getElementById('joinNotice').style.display='block';
-      document.getElementById('joinCompanyName').textContent=co.name+' · '+dept.name;
-    }
-    populateEmpDepts(joinCoId||'');
-    setTimeout(()=>{ document.getElementById('eDept').value=joinDeptId; },50);
+    document.getElementById('companyLookupBlock') && (document.getElementById('companyLookupBlock').style.display='none');
+    lockedCompanyId=joinCoId;
+    // Load dept name from API
+    try{
+      const data=await apiFetch('/api/auth/departments?company_id='+joinCoId);
+      const dept=(data.departments||[]).find(x=>x.id==joinDeptId);
+      if(dept){
+        document.getElementById('joinNotice').style.display='block';
+        document.getElementById('joinCompanyName').textContent=dept.company_name+' · '+dept.name;
+        lockedDeptName=dept.name;
+      }
+      populateEmpDeptsFromData(data.departments||[],joinDeptId);
+    }catch(e){ console.warn('Could not load dept info'); }
   } else {
-    populateEmpDepts('');
+    // load all depts for dropdown
+    try{
+      const data=await apiFetch('/api/auth/departments');
+      populateEmpDeptsFromData(data.departments||[],'');
+    }catch(e){}
   }
 });
 
@@ -466,28 +475,27 @@ function setRegRole(r){
   document.getElementById('rp-emp').classList.toggle('on',r==='employee');
 }
 
-function populateEmpDepts(lockCoId){
-  const d=db(); const sel=document.getElementById('eDept');
-  let depts=d.departments||[];
-  if(lockCoId) depts=depts.filter(x=>x.companyId===lockCoId);
+function populateEmpDeptsFromData(depts, lockToDeptId){
+  const sel=document.getElementById('eDept');
   sel.innerHTML='<option value="">— Select Department —</option>'+depts.map(dep=>`<option value="${dep.id}">${dep.name}</option>`).join('');
-  if(lockCoId&&depts.length===1) sel.value=depts[0].id;
+  if(lockToDeptId) sel.value=lockToDeptId;
 }
 
 // ── Company Code lookup ──
-function lookupCompany(){
+async function lookupCompany(){
   const code=document.getElementById('companyCodeInput').value.trim();
   const errEl=document.getElementById('companyLookupErr');
   errEl.style.display='none';
   if(!code){errEl.textContent='Enter a company code.';errEl.style.display='block';return;}
-  const d=db();
-  const co=(d.companies||[]).find(x=>x.id===code);
-  if(!co){errEl.textContent='Company not found. Check the code and try again.';errEl.style.display='block';return;}
-  lockedCompanyId=co.id;
-  document.getElementById('companyFoundBanner').style.display='flex';
-  document.getElementById('companyFoundName').textContent=co.name;
-  document.getElementById('companyCodeInput').closest('div').style.display='none';
-  populateEmpDepts(co.id);
+  try{
+    const data=await apiFetch('/api/auth/departments?company_id='+code);
+    if(!data.departments||data.departments.length===0){errEl.textContent='Company not found.';errEl.style.display='block';return;}
+    lockedCompanyId=code;
+    document.getElementById('companyFoundBanner').style.display='flex';
+    document.getElementById('companyFoundName').textContent=data.company_name||code;
+    document.getElementById('companyCodeInput').closest('div').style.display='none';
+    populateEmpDeptsFromData(data.departments,'');
+  }catch(e){errEl.textContent='Company not found. Check the code and try again.';errEl.style.display='block';}
 }
 function resetCompanyLookup(){
   lockedCompanyId='';
@@ -517,8 +525,6 @@ function goToFaceStep(){
   if(!lockedCompanyId&&!joinCoId){showMsg(err,'Enter your Company Code first to find your company.');return;}
   if(!first||!last||!email||!deptId||!pw){showMsg(err,'All fields are required.');return;}
   if(pw.length<6){showMsg(err,'Password must be 6+ characters.');return;}
-  const d=db();
-  if((d.employees||[]).find(e=>e.email.toLowerCase()===email.toLowerCase())){showMsg(err,'Email already registered.');return;}
   document.getElementById('emp-step1').style.display='none';
   document.getElementById('emp-step2').style.display='block';
   setStep(2);
@@ -714,31 +720,33 @@ async function snapRegFace(){
 // ══════════════════════════════════════
 //  LOGIN
 // ══════════════════════════════════════
-function doLogin(){
+async function doLogin(){
   const email=document.getElementById('lEmail').value.trim().toLowerCase();
   const pw=document.getElementById('lPw').value;
   const err=document.getElementById('loginErr');
   if(!email||!pw){showMsg(err,'Email and password are required.');return;}
-  const d=db();
-  if(loginRole==='admin'){
-    const a=d.admins.find(x=>x.email.toLowerCase()===email&&x.pw===pw);
-    if(a){
-      sessionStorage.setItem('at_session',JSON.stringify({role:'admin',id:a.id,name:a.name,companyId:a.companyId,setupDone:a.setupDone}));
-      location.href='admin.html';
-    } else showMsg(err,'Invalid admin credentials.');
-  } else {
-    const e=d.employees.find(x=>x.email.toLowerCase()===email&&x.pw===pw);
-    if(e){
-      sessionStorage.setItem('at_session',JSON.stringify({role:'employee',id:e.id,name:e.name,deptId:e.deptId,companyId:e.companyId,profileDone:e.profileDone}));
-      location.href='employee.html';
-    } else showMsg(err,'No account found. Please register first.');
+  try{
+    const data=await apiFetch('/api/auth/login',{
+      method:'POST',
+      body:JSON.stringify({email,password:pw,role:loginRole})
+    });
+    sessionStorage.setItem('token',data.token);
+    sessionStorage.setItem('at_session',JSON.stringify({
+      role:data.user.role,
+      id:data.user.id,
+      name:data.user.name,
+      department_id:data.user.department_id
+    }));
+    location.href=data.user.role==='admin'?'admin.html':'employee.html';
+  }catch(e){
+    showMsg(err,e.message||'Invalid credentials.');
   }
 }
 
 // ══════════════════════════════════════
 //  REGISTER — Admin
 // ══════════════════════════════════════
-function doRegAdmin(){
+async function doRegAdmin(){
   const first=document.getElementById('aFirst').value.trim();
   const last=document.getElementById('aLast').value.trim();
   const email=document.getElementById('aEmail').value.trim().toLowerCase();
@@ -748,20 +756,29 @@ function doRegAdmin(){
   const ok=document.getElementById('regOkAdmin');
   if(!first||!last||!email||!company||!pw){showMsg(err,'All fields are required.');return;}
   if(pw.length<6){showMsg(err,'Password must be 6+ characters.');return;}
-  const d=db();
-  if(d.admins.find(a=>a.email.toLowerCase()===email)){showMsg(err,'Email already registered.');return;}
-  const coId='CO-'+Date.now(), admId='ADM-'+Date.now();
-  d.companies.push({id:coId,name:company,adminId:admId,createdAt:new Date().toISOString()});
-  d.admins.push({id:admId,name:first+' '+last,email,pw,companyId:coId,setupDone:false,createdAt:new Date().toISOString()});
-  saveDB(d);
-  showMsg(ok,'Account created! Redirecting…','ok');
-  setTimeout(()=>{sessionStorage.setItem('at_session',JSON.stringify({role:'admin',id:admId,name:first+' '+last,companyId:coId,setupDone:false}));location.href='admin.html';},1400);
+  try{
+    const data=await apiFetch('/api/auth/register',{
+      method:'POST',
+      body:JSON.stringify({name:first+' '+last,email,password:pw,role:'admin',company_name:company})
+    });
+    showMsg(ok,'Account created! Signing you in…','ok');
+    // Now login automatically
+    const loginData=await apiFetch('/api/auth/login',{
+      method:'POST',
+      body:JSON.stringify({email,password:pw,role:'admin'})
+    });
+    sessionStorage.setItem('token',loginData.token);
+    sessionStorage.setItem('at_session',JSON.stringify({role:'admin',id:loginData.user.id,name:loginData.user.name}));
+    setTimeout(()=>location.href='admin.html',1200);
+  }catch(e){
+    showMsg(err,e.message||'Registration failed.');
+  }
 }
 
 // ══════════════════════════════════════
 //  REGISTER — Employee (stores descriptor)
 // ══════════════════════════════════════
-function doRegEmp(){
+async function doRegEmp(){
   if(!regFaceBase64){showMsg(document.getElementById('regErrEmp'),'Please capture your face photo first.');return;}
   const first=document.getElementById('eFirst').value.trim();
   const last=document.getElementById('eLast').value.trim();
@@ -772,27 +789,34 @@ function doRegEmp(){
   const pw=document.getElementById('ePw').value;
   const err=document.getElementById('regErrEmp');
   const ok=document.getElementById('regOkEmp');
-  const d=db();
-  const dept=d.departments.find(x=>x.id===deptId);
-  if(!dept){showMsg(err,'Invalid department. Please re-enter your company code.');return;}
-  const empId='EMP-'+String((d.employees||[]).length+1).padStart(3,'0');
-  const todayStr=new Date().toISOString().split('T')[0];
-  const emp={
-    id:empId, name:first+' '+last, email, phone, pw,
-    deptId, companyId:dept.companyId,
-    pos:pos||'Employee', joinDate:todayStr,
-    profileDone:false, faceEnrolled:true,
-    facePhoto:regFaceBase64,
-    faceDescriptor:regFaceDescriptor,   // 128-float biometric array
-    createdAt:new Date().toISOString()
-  };
-  d.employees.push(emp);
-  saveDB(d);
-  showMsg(ok,`Welcome, ${first}! Your ID is ${empId} — signing you in…`,'ok');
-  setTimeout(()=>{
-    sessionStorage.setItem('at_session',JSON.stringify({role:'employee',id:empId,name:emp.name,deptId,companyId:dept.companyId,profileDone:false}));
-    location.href='employee.html';
-  },1600);
+  if(!deptId){showMsg(err,'Please select a department.');return;}
+  try{
+    // Register via API — pass face descriptor for biometric storage
+    const data=await apiFetch('/api/auth/register',{
+      method:'POST',
+      body:JSON.stringify({
+        name:first+' '+last, email, password:pw, role:'employee',
+        department_id:deptId,
+        face_descriptor:regFaceDescriptor,
+        face_photo:regFaceBase64,
+        phone, position:pos||'Employee'
+      })
+    });
+    showMsg(ok,`Welcome, ${first}! Signing you in…`,'ok');
+    // Auto login
+    const loginData=await apiFetch('/api/auth/login',{
+      method:'POST',
+      body:JSON.stringify({email,password:pw,role:'employee'})
+    });
+    sessionStorage.setItem('token',loginData.token);
+    sessionStorage.setItem('at_session',JSON.stringify({
+      role:'employee',id:loginData.user.id,name:loginData.user.name,
+      department_id:loginData.user.department_id
+    }));
+    setTimeout(()=>location.href='employee.html',1400);
+  }catch(e){
+    showMsg(err,e.message||'Registration failed.');
+  }
 }
 
 function p(n){return String(n).padStart(2,'0');}

@@ -599,18 +599,33 @@
 <!-- face-api.js — real neural network face recognition -->
 <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 <script>
-const DB_KEY='at_db';
-function db(){try{return JSON.parse(localStorage.getItem(DB_KEY))||{}}catch(e){return{}}}
-function save(d){localStorage.setItem(DB_KEY,JSON.stringify(d))}
+<!-- face-api.js — real neural network face recognition -->
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<script>
+// ═══════════════════════════════════════════
+//  API CONFIG
+// ═══════════════════════════════════════════
+const API = 'https://attendance-app-at.up.railway.app';
 
+async function apiFetch(path, options={}){
+  const token=sessionStorage.getItem('token');
+  const headers={'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{}),...(options.headers||{})};
+  const res=await fetch(API+path,{...options,headers});
+  const data=await res.json();
+  if(!res.ok) throw new Error(data.error||'Request failed');
+  return data;
+}
+
+// ── Auth ──
 const sess=JSON.parse(sessionStorage.getItem('at_session')||'null');
 if(!sess||sess.role!=='employee'){location.href='index.html';}
 
 let me=null;
 let calY=new Date().getFullYear(), calM=new Date().getMonth();
-let snapDone=false, gpsDone=false, faceDone=false, wt='office', stream=null;
-let capturedLat=null, capturedLng=null, capturedAcc=null;
+let snapDone=false,gpsDone=false,faceDone=false,wt='office',stream=null;
+let capturedLat=null,capturedLng=null,capturedAcc=null;
 let faceMatchScore=0;
+let myAttendance=[];
 
 // ── face-api.js models ──
 const MODEL_URL='https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model';
@@ -623,8 +638,7 @@ async function loadFaceModels(){
       faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
     ]);
     faceApiReady=true;
-    console.log('✅ face-api.js ready');
-  } catch(e){ faceApiReady=false; console.warn('face-api load failed:',e.message); }
+  }catch(e){ faceApiReady=false; }
 }
 loadFaceModels();
 
@@ -632,107 +646,59 @@ loadFaceModels();
 function tick(){const el=document.getElementById('clk');if(el)el.textContent=new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
 setInterval(tick,1000);tick();
 
-document.addEventListener('DOMContentLoaded',()=>{
-  const d=db();
-  me=(d.employees||[]).find(e=>e.id===sess.id);
-  if(!me){logout();return;}
+document.addEventListener('DOMContentLoaded',async()=>{
+  try{
+    const res=await apiFetch('/api/auth/me');
+    me=res.user;
+    // Load attendance
+    const attRes=await apiFetch('/api/attendance?user_id='+me.id+'&limit=100');
+    myAttendance=attRes.data||[];
+  }catch(e){ location.href='index.html'; return; }
 
-  // Show face photo in nav avatar if enrolled
-  if(me.facePhoto){
-    setAvatarPhoto('navAv',me.facePhoto);
-    setAvatarPhoto('poAv',me.facePhoto);
-  }
-
-  if(me.deptId){
-    if(!me.profileDone) showProfileOnly(d);
-    else showDashboard(d);
-  } else showProfileOnly(d);
-});
-
-function setAvatarPhoto(id,src){
-  const el=document.getElementById(id);
-  if(!el)return;
-  el.innerHTML=`<img src="${src}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
-}
-
-// ══ PROFILE SETUP ══
-function showProfileOnly(d){
-  document.getElementById('profileOnly').classList.add('show');
-  if(me.facePhoto) setAvatarPhoto('poAv',me.facePhoto);
-  else document.getElementById('poAv').textContent=initials(me.name);
-  document.getElementById('poName').textContent=me.name;
-  document.getElementById('poEmail').textContent=me.email;
-  document.getElementById('poEmpId').textContent=me.id;
-  if(me.deptId){
-    const dept=(d.departments||[]).find(x=>x.id===me.deptId);
-    const co=(d.companies||[]).find(x=>x.id===me.companyId);
-    document.getElementById('hasDeptBlock').style.display='block';
-    document.getElementById('noDeptBlock').style.display='none';
-    document.getElementById('poCoInfo').textContent=`${co?.name||'Your Company'} — ${dept?.name||'Department'}`;
-    document.getElementById('profPos').value=me.pos||'';
-    document.getElementById('profPhone').value=me.phone||'';
-  } else {
-    document.getElementById('hasDeptBlock').style.display='none';
-    document.getElementById('noDeptBlock').style.display='block';
-  }
-}
-function saveProfile(){
-  const phone=document.getElementById('profPhone').value.trim();
-  const addr=document.getElementById('profAddr').value.trim();
-  const ok=document.getElementById('profOk');
-  const d=db();
-  const emp=d.employees.find(e=>e.id===me.id);
-  if(!emp)return;
-  if(phone)emp.phone=phone;
-  if(addr)emp.address=addr;
-  emp.profileDone=true; me=emp; save(d);
-  ok.textContent='Profile saved! Loading dashboard…'; ok.style.display='block';
-  setTimeout(()=>{document.getElementById('profileOnly').classList.remove('show');showDashboard(d);},1200);
-}
-
-// ══ DASHBOARD SETUP ══
-function showDashboard(d){
-  const dept=(d.departments||[]).find(x=>x.id===me.deptId);
-  const co=(d.companies||[]).find(x=>x.id===me.companyId);
-  document.getElementById('dashWrap').classList.add('show');
-  if(me.facePhoto) setAvatarPhoto('navAv',me.facePhoto);
-  else document.getElementById('navAv').textContent=initials(me.name);
+  document.getElementById('navAv').textContent=initials(me.name);
   document.getElementById('navName').textContent=me.name;
-  document.getElementById('navDept').textContent=dept?.name||'—';
-  document.getElementById('navCompany').textContent=co?.name||'AttendTrack';
+  document.getElementById('navDept').textContent=me.department_name||'—';
   document.getElementById('greeting').textContent=greet()+', '+me.name.split(' ')[0];
   document.getElementById('homeDate').textContent=new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  renderHome(); populateHistSel(); renderHistory(); renderProfile(); loadTodayTimes();
-  const todayRec=myAtt().find(a=>a.date===today());
-  if(todayRec?.checkIn&&todayRec?.checkOut) setSbar('done',todayRec.checkIn,todayRec.checkOut);
-  else if(todayRec?.checkIn) setSbar('in',todayRec.checkIn);
-}
+
+  renderHome();
+  populateHistSel();
+  renderHistory();
+  renderProfile();
+  loadTodayTimes();
+
+  const todayRec=myAttendance.find(a=>a.date===today());
+  if(todayRec?.check_in_time&&todayRec?.check_out_time) setSbar('done',fmtTime(todayRec.check_in_time),fmtTime(todayRec.check_out_time));
+  else if(todayRec?.check_in_time) setSbar('in',fmtTime(todayRec.check_in_time));
+});
 
 function tab(name,el){
   document.querySelectorAll('.sec').forEach(s=>s.classList.remove('on'));
   document.getElementById('tab-'+name).classList.add('on');
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   if(el)el.classList.add('active');
-  if(name==='history')renderHistory();
-  if(name==='profile')renderProfile();
-  if(name!=='mark'&&stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+  if(name==='history') renderHistory();
+  if(name==='profile') renderProfile();
 }
 function logout(){sessionStorage.clear();location.href='index.html';}
 
 // ── Helpers ──
-function myAtt(){const d=db();return(d.attendance||[]).filter(a=>a.empId===me.id);}
 function today(){return new Date().toISOString().split('T')[0];}
 function p(n){return String(n).padStart(2,'0');}
 function initials(n){return n?n.split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase():'?';}
 function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):'';}
 function greet(){const h=new Date().getHours();return h<12?'Good morning':h<17?'Good afternoon':'Good evening';}
-function calcH([ih,im],[oh,om]){const t=oh*60+om-ih*60-im;return Math.floor(t/60)+'h '+t%60+'m';}
+function fmtTime(dt){if(!dt)return'—';try{return new Date(dt).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});}catch(e){return dt;}}
+function calcHours(inDt,outDt){
+  if(!inDt||!outDt)return'—';
+  const diff=Math.round((new Date(outDt)-new Date(inDt))/60000);
+  return Math.floor(diff/60)+'h '+diff%60+'m';
+}
 
-// ══ HOME ══
+// ── HOME ──
 function renderHome(){
-  const att=myAtt();
-  const m=new Date().getMonth()+1,y=new Date().getFullYear();
-  const mA=att.filter(a=>{const dt=new Date(a.date);return dt.getMonth()+1===m&&dt.getFullYear()===y;});
+  const m=new Date().getMonth()+1, y=new Date().getFullYear();
+  const mA=myAttendance.filter(a=>{const dt=new Date(a.date);return dt.getMonth()+1===m&&dt.getFullYear()===y;});
   const pr=mA.filter(a=>a.status==='present').length;
   const la=mA.filter(a=>a.status==='late').length;
   const ab=mA.filter(a=>a.status==='absent').length;
@@ -745,7 +711,7 @@ function renderHome(){
 }
 
 function buildCal(){
-  const att=myAtt(); const todayStr=today();
+  const todayStr=today();
   const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
   document.getElementById('calTitle').textContent=months[calM]+' '+calY;
   const firstDay=new Date(calY,calM,1).getDay();
@@ -760,7 +726,13 @@ function buildCal(){
     let cls='';
     if(isFuture) cls='future';
     else if(isWeekend) cls='weekend';
-    else{const rec=att.find(a=>a.date===ds);cls=rec?.status==='present'||rec?.status==='wfh'?'present':rec?.status==='late'?'late':rec?.status==='absent'?'absent':'no-data';}
+    else{
+      const rec=myAttendance.find(a=>a.date===ds);
+      if(rec?.status==='present'||rec?.status==='wfh') cls='present';
+      else if(rec?.status==='late') cls='late';
+      else if(rec?.status==='absent') cls='absent';
+      else cls='no-data';
+    }
     html+=`<div class="cal-cell ${cls}${isToday?' today':''}">${d}</div>`;
   }
   document.getElementById('calGrid').innerHTML=html;
@@ -769,28 +741,28 @@ function prevM(){if(calM===0){calM=11;calY--;}else calM--;buildCal();}
 function nextM(){if(calM===11){calM=0;calY++;}else calM++;buildCal();}
 
 function buildTodayBox(){
-  const rec=myAtt().find(a=>a.date===today());
-  if(!rec){document.getElementById('todayBox').innerHTML=`<p style="font-size:12px;color:var(--muted);margin-bottom:12px">No attendance recorded today.</p><button class="btn primary" style="width:100%" onclick="tab('mark',document.querySelectorAll('.nav-tab')[1])">Mark Attendance →</button>`;return;}
-  const ip=rec.checkIn?rec.checkIn.split(':').map(Number):null;
-  const op=rec.checkOut?rec.checkOut.split(':').map(Number):null;
-  const hrs=ip&&op?calcH(ip,op):'—';
+  const rec=myAttendance.find(a=>a.date===today());
+  if(!rec){
+    document.getElementById('todayBox').innerHTML=`<p style="font-size:12px;color:var(--muted);margin-bottom:12px">No attendance recorded today.</p><button class="btn primary" style="width:100%" onclick="tab('mark',document.querySelectorAll('.nav-tab')[1])">Go to Mark Attendance</button>`;
+    return;
+  }
+  const hrs=calcHours(rec.check_in_time,rec.check_out_time);
   document.getElementById('todayBox').innerHTML=`
-    <div style="display:flex;flex-direction:column;gap:8px">
-      ${rowBox('Check In',rec.checkIn||'—',!!rec.checkIn)}
-      ${rowBox('Check Out',rec.checkOut||'Pending',!!rec.checkOut)}
+    <div style="display:flex;flex-direction:column;gap:9px">
+      ${rowBox('Check In',fmtTime(rec.check_in_time),!!rec.check_in_time)}
+      ${rowBox('Check Out',rec.check_out_time?fmtTime(rec.check_out_time):'Pending',!!rec.check_out_time)}
       ${rowBox('Hours',hrs,false)}
       <div style="text-align:center"><span class="badge ${rec.status}">${cap(rec.status)}</span></div>
-      ${rec.gps?`<div style="font-size:10px;color:var(--muted);text-align:center">📍 ${rec.gps}</div>`:''}
     </div>`;
 }
 function rowBox(l,v,hi){return`<div style="display:flex;justify-content:space-between;padding:9px;background:var(--off);border-radius:4px;border:1px solid var(--border)"><span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">${l}</span><span style="font-size:14px;font-weight:700;color:${hi?'var(--accent)':'var(--light)'}">${v}</span></div>`;}
 
-// ══ MARK ATTENDANCE — load existing times ══
+// ══ MARK ATTENDANCE ══
 function loadTodayTimes(){
-  const rec=myAtt().find(a=>a.date===today());
-  if(rec?.checkIn){setTB('in',rec.checkIn);document.getElementById('btnIn').className='btn done-look';document.getElementById('btnIn').textContent='Checked In ✓';document.getElementById('btnIn').disabled=true;}
-  if(rec?.checkOut){setTB('out',rec.checkOut);document.getElementById('btnOut').className='btn done-look';document.getElementById('btnOut').textContent='Checked Out ✓';document.getElementById('btnOut').disabled=true;}
-  if(rec?.checkIn&&!rec?.checkOut){document.getElementById('btnOut').disabled=false;document.getElementById('btnOut').className='btn danger';}
+  const rec=myAttendance.find(a=>a.date===today());
+  if(rec?.check_in_time){setTB('in',fmtTime(rec.check_in_time));document.getElementById('btnIn').className='btn done-look';document.getElementById('btnIn').textContent='Checked In ✓';document.getElementById('btnIn').disabled=true;}
+  if(rec?.check_out_time){setTB('out',fmtTime(rec.check_out_time));document.getElementById('btnOut').className='btn done-look';document.getElementById('btnOut').textContent='Checked Out ✓';document.getElementById('btnOut').disabled=true;}
+  if(rec?.check_in_time&&!rec?.check_out_time){document.getElementById('btnOut').disabled=false;document.getElementById('btnOut').className='btn danger';}
 }
 function setTB(type,time){
   const box=document.getElementById(type==='in'?'inBox':'outBox');
@@ -811,11 +783,8 @@ async function startCam(){
     document.getElementById('camBarL').innerHTML='Camera <span>active</span> — align face with oval';
     btn.textContent='Stop'; btn.disabled=false; btn.onclick=stopCam;
     document.getElementById('btnSnap').disabled=false;
-  } catch(e){
-    // Demo mode
-    document.getElementById('camOv').innerHTML='<div class="ico">🤳</div><p>Camera unavailable<br><a onclick="snapAndVerify()" style="cursor:pointer;color:var(--accent);font-weight:700">Demo: click Capture & Verify</a></p>';
-    document.getElementById('camOv').style.display='flex';
-    document.getElementById('btnSnap').disabled=false;
+  }catch(e){
+    document.getElementById('camOv').innerHTML='<div class="ico">🤳</div><p>Camera unavailable — please allow camera access</p>';
     btn.textContent='Start Camera'; btn.disabled=false;
   }
 }
@@ -830,26 +799,18 @@ function stopCam(){
   document.getElementById('btnSnap').disabled=true;
 }
 
-// ══ SNAP + FACE VERIFY ══
 // ══ SNAP + REAL FACE VERIFY (face-api.js) ══
 async function snapAndVerify(){
   const vid=document.getElementById('vid');
   const snapBtn=document.getElementById('btnSnap');
   snapBtn.disabled=true;
-
-  if(!vid.srcObject||vid.readyState<2){
-    snapBtn.disabled=false;
-    showAttAlert('Please start your camera first.','err'); return;
-  }
-
-  // Capture current frame to canvas
+  if(!vid.srcObject||vid.readyState<2){snapBtn.disabled=false;showAttAlert('Please start your camera first.','err');return;}
   const cvs=document.getElementById('cvs');
   const ctx=cvs.getContext('2d');
-  cvs.width=vid.videoWidth||640; cvs.height=vid.videoHeight||480;
-  ctx.save(); ctx.scale(-1,1); ctx.drawImage(vid,-cvs.width,0); ctx.restore();
+  cvs.width=vid.videoWidth||640;cvs.height=vid.videoHeight||480;
+  ctx.save();ctx.scale(-1,1);ctx.drawImage(vid,-cvs.width,0);ctx.restore();
   const snapBase64=cvs.toDataURL('image/jpeg',0.9);
 
-  // Show verification overlay
   const ov=document.getElementById('verifyOv');
   const ring=document.getElementById('vring');
   const icon=document.getElementById('vringIcon');
@@ -857,31 +818,26 @@ async function snapAndVerify(){
   const sub=document.getElementById('verifySub');
   const scoreEl=document.getElementById('verifyScore');
   ov.classList.add('show');
-  ring.className='vring'; icon.textContent=''; scoreEl.style.display='none';
-  label.textContent='Detecting face…'; sub.textContent='';
+  ring.className='vring';icon.textContent='';scoreEl.style.display='none';
+  label.textContent='Detecting face…';sub.textContent='';
 
   try{
     if(!faceApiReady) throw new Error('MODELS_NOT_READY');
 
-    // Step 1 — detect face in live video frame
     label.textContent='Detecting face in camera…';
     sub.textContent='Running TinyFaceDetector';
     const liveDetection=await faceapi
-      .detectSingleFace(vid, new faceapi.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:0.5}))
-      .withFaceLandmarks()
-      .withFaceDescriptor();
-
+      .detectSingleFace(vid,new faceapi.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:0.5}))
+      .withFaceLandmarks().withFaceDescriptor();
     if(!liveDetection) throw new Error('NO_FACE_LIVE');
 
-    // Step 2 — load stored 128-float descriptor
     label.textContent='Loading enrolled biometrics…';
     sub.textContent='Retrieving your face profile';
     await new Promise(r=>setTimeout(r,400));
 
-    const storedDescriptor=me?.faceDescriptor;
+    const storedDescriptor=me?.face_descriptor;
     if(!storedDescriptor||storedDescriptor.length===0) throw new Error('NO_STORED_DESCRIPTOR');
 
-    // Step 3 — Euclidean distance between descriptors
     label.textContent='Comparing face biometrics…';
     sub.textContent='Computing similarity distance';
     await new Promise(r=>setTimeout(r,500));
@@ -891,8 +847,6 @@ async function snapAndVerify(){
     let dist=0;
     for(let i=0;i<128;i++) dist+=(stored[i]-live[i])**2;
     dist=Math.sqrt(dist);
-
-    // dist < 0.5 = same person  |  dist >= 0.6 = different person
     const score=Math.round(Math.max(0,Math.min(100,(1-(dist/0.6))*100)));
     faceMatchScore=score;
     const pass=dist<0.5;
@@ -902,271 +856,133 @@ async function snapAndVerify(){
     scoreEl.textContent=score+'%';
     scoreEl.className='verify-score'+(pass?'':' fail');
     scoreEl.style.display='block';
-    label.textContent=pass?'Identity verified!':'Face does not match — try again';
-    sub.textContent=pass
-      ?'Euclidean dist: '+dist.toFixed(3)+' (< 0.5 threshold)'
-      :'Euclidean dist: '+dist.toFixed(3)+' (≥ 0.5 — not matched)';
+    label.textContent=pass?'Identity verified!':'Face does not match';
+    sub.textContent=pass?'Distance: '+dist.toFixed(3)+' < 0.5':'Distance: '+dist.toFixed(3)+' ≥ 0.5';
 
     setTimeout(()=>{
-      ov.classList.remove('show');
-      stopCam();
+      ov.classList.remove('show');stopCam();
       if(pass){
         document.getElementById('snapThumb').src=snapBase64;
         document.getElementById('snapScore').textContent=score+'%';
         document.getElementById('snapPrev').classList.add('show');
         document.getElementById('scoreLabel').textContent=score+'% match';
         document.getElementById('scoreLabel').className='score-badge ok';
-        snapDone=true; faceDone=true;
-        markCk('ck1'); markCk('ck3');
-        updateBtns();
-      } else {
+        snapDone=true;faceDone=true;
+        markCk('ck1');markCk('ck3');updateBtns();
+      }else{
         document.getElementById('scoreLabel').textContent='Failed – retry';
         document.getElementById('scoreLabel').className='score-badge';
         snapBtn.disabled=false;
-        showAttAlert('Face does not match ('+score+'%). Face the camera directly in good lighting and try again.','err');
+        showAttAlert('Face does not match ('+score+'%). Look directly at camera in good lighting.','err');
       }
     },1800);
 
-  } catch(e){
-    ov.classList.remove('show');
-    snapBtn.disabled=false;
-    if(e.message==='NO_FACE_LIVE'){
-      showAttAlert('❌ No face detected. Look directly at the camera in good lighting.','err');
-    } else if(e.message==='NO_STORED_DESCRIPTOR'){
-      showAttAlert('⚠ No biometric profile found. Please re-register or contact your admin.','err');
-    } else if(e.message==='MODELS_NOT_READY'){
-      showAttAlert('⏳ Face AI models still loading. Wait a moment and try again.','err');
-    } else {
-      showAttAlert('Verification error: '+e.message+'. Please try again.','err');
-    }
+  }catch(e){
+    ov.classList.remove('show');snapBtn.disabled=false;
+    if(e.message==='NO_FACE_LIVE') showAttAlert('❌ No face detected. Look directly at the camera.','err');
+    else if(e.message==='NO_STORED_DESCRIPTOR') showAttAlert('⚠ No biometric profile. Please re-register.','err');
+    else if(e.message==='MODELS_NOT_READY') showAttAlert('⏳ AI models loading. Wait and try again.','err');
+    else showAttAlert('Verification error. Try again.','err');
   }
 }
 
-
-// ══ GPS — watchPosition for continuously improving accuracy ══
+// ══ GPS ══
 let gpsWatchId=null;
-
 function getGPS(){
   const btn=document.getElementById('btnGps');
-  const modal=document.getElementById('gpsLoadingModal');
-  const phase=document.getElementById('gpsPhase');
-
-  // Stop any previous watch
-  if(gpsWatchId!==null){
-    navigator.geolocation.clearWatch(gpsWatchId);
-    gpsWatchId=null;
-  }
-
-  btn.textContent='Locating…'; btn.disabled=true;
-
-  if(!navigator.geolocation){
-    showAttAlert('Geolocation is not supported by your browser.','err');
-    btn.textContent='Not Supported'; return;
-  }
-
-  if(navigator.permissions){
-    navigator.permissions.query({name:'geolocation'}).then(r=>{
-      if(r.state==='denied'){gpsError(1,btn);return;}
-      startWatch(btn,modal,phase);
-    }).catch(()=>startWatch(btn,modal,phase));
-  } else {
-    startWatch(btn,modal,phase);
-  }
-}
-
-function startWatch(btn,modal,phase){
-  modal.classList.add('show');
-  phase.textContent='Allow location access in your browser…';
-
-  let bestAcc=Infinity;
-  let firstFixDone=false;
-
-  // Auto-stop after 20 seconds whatever happens
-  const watchTimeout=setTimeout(()=>{
-    if(gpsWatchId!==null){
-      navigator.geolocation.clearWatch(gpsWatchId);
-      gpsWatchId=null;
-    }
-    modal.classList.remove('show');
-    if(!firstFixDone){
-      gpsError(3,btn);
-    } else {
-      // We have a fix, just not ideal accuracy — that's OK
-      btn.textContent='Refresh Location'; btn.disabled=false;
-      setGPS(capturedLat||0, capturedLng||0, capturedAcc||999, true);
-    }
-  },20000);
-
+  btn.textContent='Locating…';btn.disabled=true;
+  if(!navigator.geolocation){setGPS('28.613900','77.209000',500,'Default location');return;}
+  if(gpsWatchId) navigator.geolocation.clearWatch(gpsWatchId);
+  let bestAcc=Infinity,timeout=null;
   gpsWatchId=navigator.geolocation.watchPosition(
     pos=>{
-      const lat=pos.coords.latitude;
-      const lng=pos.coords.longitude;
-      const acc=pos.coords.accuracy;
-
-      if(acc<bestAcc){
-        bestAcc=acc;
-        if(!firstFixDone){
-          firstFixDone=true;
-          modal.classList.remove('show');
-          btn.textContent='Improving accuracy…';
-        }
-        // Update map + coords immediately with every better reading
-        setGPS(lat, lng, acc, acc<=60);
-      }
-
-      // Stop once we hit GPS-quality accuracy (≤20m)
-      if(acc<=20){
-        clearTimeout(watchTimeout);
-        navigator.geolocation.clearWatch(gpsWatchId);
-        gpsWatchId=null;
-        setGPS(lat, lng, acc, true);
-        btn.textContent='Refresh Location'; btn.disabled=false;
+      if(pos.coords.accuracy<bestAcc){
+        bestAcc=pos.coords.accuracy;
+        setGPS(pos.coords.latitude.toFixed(6),pos.coords.longitude.toFixed(6),Math.round(pos.coords.accuracy),'Live GPS');
+        capturedLat=pos.coords.latitude;capturedLng=pos.coords.longitude;capturedAcc=pos.coords.accuracy;
+        if(pos.coords.accuracy<=20){navigator.geolocation.clearWatch(gpsWatchId);if(timeout)clearTimeout(timeout);}
       }
     },
-    err=>{
-      clearTimeout(watchTimeout);
-      if(gpsWatchId!==null){navigator.geolocation.clearWatch(gpsWatchId);gpsWatchId=null;}
-      modal.classList.remove('show');
-      gpsError(err.code, btn);
-    },
-    {enableHighAccuracy:true, timeout:15000, maximumAge:5000}
+    ()=>setGPS('28.613900','77.209000',500,'Default (GPS denied)'),
+    {enableHighAccuracy:true,timeout:15000,maximumAge:0}
   );
+  timeout=setTimeout(()=>navigator.geolocation.clearWatch(gpsWatchId),20000);
+}
+function setGPS(lat,lng,acc,label){
+  capturedLat=parseFloat(lat);capturedLng=parseFloat(lng);
+  document.getElementById('gpsC').textContent=lat+'° N, '+lng+'° E';
+  document.getElementById('gpsA').textContent=(label||'GPS')+' · ±'+acc+'m';
+  document.getElementById('gpsDot').className='gps-dot live';
+  document.getElementById('btnGps').textContent='Refresh Location';document.getElementById('btnGps').disabled=false;
+  gpsDone=true;markCk('ck2');updateBtns();
+  // Update map iframe
+  const mapEl=document.getElementById('gpsMap');
+  if(mapEl) mapEl.src=`https://maps.google.com/maps?q=${lat},${lng}&z=16&output=embed`;
 }
 
-function gpsError(code,btn){
-  if(btn){btn.textContent='Try Again'; btn.disabled=false;}
-  let msg='';
-  if(code===1){
-    msg='Location access denied. Go to browser Settings → Site permissions → Location → Allow for this site.';
-    document.getElementById('gpsCoords').textContent='Permission denied';
-    document.getElementById('gpsAddr').textContent='Enable location in browser settings then press Try Again';
-  } else if(code===2){
-    msg='Location unavailable. Check your internet or move near a window.';
-    document.getElementById('gpsCoords').textContent='Signal unavailable';
-    document.getElementById('gpsAddr').textContent='Try moving closer to a window or outdoors';
-  } else {
-    msg='Location timed out. Press Try Again.';
-    document.getElementById('gpsCoords').textContent='Timed out — press Try Again';
-    document.getElementById('gpsAddr').textContent='';
-  }
-  document.getElementById('gpsLed').className='gps-led';
-  document.getElementById('gpsStatusTxt').textContent='Error';
-  showAttAlert('📍 '+msg,'err');
-}
-
-function setGPS(lat,lng,acc,final){
-  capturedLat=lat; capturedLng=lng; capturedAcc=acc;
-
-  const latN=parseFloat(lat);
-  const lngN=parseFloat(lng);
-  const latF=latN.toFixed(6);
-  const lngF=lngN.toFixed(6);
-  const accM=Math.round(acc||999);
-
-  // ── Coordinates display ──
-  document.getElementById('gpsCoords').textContent=latF+'° N, '+lngF+'° E';
-
-  // ── Accuracy badge ──
-  const accEl=document.getElementById('gpsAcc');
-  accEl.style.display='block';
-  if(accM<=20){
-    accEl.textContent='± '+accM+' m — Excellent accuracy';
-    accEl.style.color='var(--accent)';
-  } else if(accM<=100){
-    accEl.textContent='± '+accM+' m — Good accuracy';
-    accEl.style.color='var(--amber)';
-  } else {
-    accEl.textContent='± '+accM+' m — Network-based (± '+accM+' m)';
-    accEl.style.color='var(--red)';
-  }
-
-  document.getElementById('gpsLed').className='gps-led live';
-  document.getElementById('gpsStatusTxt').textContent=final?'Live':'Acquiring…';
-
-  // ── Map: clickable Google Maps thumbnail (no API key needed) ──
-  // Static map via maps.google.com works in any browser, shows real tiles
-  const mapsUrl=`https://maps.google.com/maps?q=${latF},${lngF}&z=16&output=embed`;
-  document.getElementById('mapFrame').innerHTML=
-    `<iframe
-      src="${mapsUrl}"
-      style="width:100%;height:100%;border:none"
-      loading="lazy"
-      allowfullscreen
-      referrerpolicy="no-referrer-when-downgrade"
-      title="Your location">
-    </iframe>`;
-
-  // ── Reverse geocode: get readable address from Nominatim (free, no key) ──
-  document.getElementById('gpsAddr').textContent='Getting address…';
-  fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latF}&lon=${lngF}&format=json`,{
-    headers:{'Accept-Language':'en','User-Agent':'AttendTrack-App'}
-  })
-  .then(r=>r.json())
-  .then(data=>{
-    const a=data.address||{};
-    // Build a short readable address: road, suburb/neighbourhood, city
-    const parts=[
-      a.road||a.pedestrian||a.footway||'',
-      a.suburb||a.neighbourhood||a.village||'',
-      a.city||a.town||a.county||''
-    ].filter(Boolean);
-    const addr=parts.length>0 ? parts.join(', ') : data.display_name?.split(',').slice(0,3).join(',') || 'Address found';
-    document.getElementById('gpsAddr').textContent='📍 '+addr;
-  })
-  .catch(()=>{
-    document.getElementById('gpsAddr').textContent=final?'Location captured ✓':'Refining accuracy…';
-  });
-
-  if(final){
-    gpsDone=true; markCk('ck2'); updateBtns();
-  }
-}
-
-// ══ Checklist & button state ══
 function markCk(id){const el=document.getElementById(id);el.classList.add('done');el.querySelector('.chk-mark').textContent='✓';}
 function updateBtns(){
-  const ready=snapDone&&gpsDone&&faceDone;
-  const rec=myAtt().find(a=>a.date===today());
+  const ready=snapDone&&gpsDone;
+  const rec=myAttendance.find(a=>a.date===today());
   const inBtn=document.getElementById('btnIn'),outBtn=document.getElementById('btnOut');
-  if(!rec?.checkIn){inBtn.disabled=!ready;if(ready)inBtn.className='btn primary';}
-  if(rec?.checkIn&&!rec?.checkOut){outBtn.disabled=!ready;if(ready)outBtn.className='btn danger';}
+  if(!rec?.check_in_time){inBtn.disabled=!ready;if(ready)inBtn.className='btn primary';}
+  if(rec?.check_in_time&&!rec?.check_out_time){outBtn.disabled=!ready;if(ready)outBtn.className='btn danger';}
 }
 function selWT(t){wt=t;['office','wfh','field'].forEach(x=>{document.getElementById('wt-'+x).className='wt'+(x===t?' sel':'');});}
 
-// ══ Mark IN / OUT ══
-function markAtt(type){
-  if(!snapDone||!gpsDone||!faceDone){showAttAlert('Complete all 3 steps first.','err');return;}
-  const d=db(); const todayStr=today(); const now=new Date();
+async function markAtt(type){
+  if(!snapDone||!gpsDone){showAttAlert('Complete all steps first.','err');return;}
+  const now=new Date();
   const ts=p(now.getHours())+':'+p(now.getMinutes());
-  const isLate=type==='in'&&(now.getHours()>9||(now.getHours()===9&&now.getMinutes()>15));
-  let rec=(d.attendance||[]).find(a=>a.empId===me.id&&a.date===todayStr);
 
-  const gpsStr=capturedLat&&capturedLng?`${capturedLat.toFixed(6)}° N, ${capturedLng.toFixed(6)}° E`:'Unknown';
-
-  if(type==='in'){
-    if(rec?.checkIn){showAttAlert('Already checked in today.','err');return;}
-    if(!rec){rec={id:'ATT-'+Date.now(),empId:me.id,date:todayStr,checkIn:null,checkOut:null,score:faceMatchScore,gps:gpsStr,lat:capturedLat,lng:capturedLng,status:'',workType:wt};d.attendance=d.attendance||[];d.attendance.push(rec);}
-    rec.checkIn=ts; rec.status=isLate?'late':'present'; rec.score=faceMatchScore; rec.workType=wt; rec.gps=gpsStr; rec.lat=capturedLat; rec.lng=capturedLng;
-    setTB('in',ts);
-    document.getElementById('btnIn').className='btn done-look';
-    document.getElementById('btnIn').textContent='Checked In ✓';
-    document.getElementById('btnIn').disabled=true;
-    document.getElementById('btnOut').disabled=false;
-    document.getElementById('btnOut').className='btn danger';
-    setSbar('in',ts);
-    showAttAlert('✓ Checked in at '+ts+(isLate?' — Late':' — On time')+' · GPS: '+gpsStr,'ok');
-  } else {
-    if(!rec?.checkIn){showAttAlert('Check in first.','err');return;}
-    if(rec.checkOut){showAttAlert('Already checked out.','err');return;}
-    rec.checkOut=ts; rec.checkOutGps=gpsStr; rec.checkOutLat=capturedLat; rec.checkOutLng=capturedLng;
-    setTB('out',ts);
-    document.getElementById('btnOut').className='btn done-look';
-    document.getElementById('btnOut').textContent='Checked Out ✓';
-    document.getElementById('btnOut').disabled=true;
-    setSbar('done',rec.checkIn,ts);
-    showAttAlert('✓ Checked out at '+ts+' · GPS: '+gpsStr+' · Great work!','ok');
+  try{
+    if(type==='in'){
+      const rec=myAttendance.find(a=>a.date===today());
+      if(rec?.check_in_time){showAttAlert('Already checked in.','err');return;}
+      // Call backend checkin API
+      const res=await apiFetch('/api/attendance/checkin',{
+        method:'POST',
+        body:JSON.stringify({
+          employee_id:me.id,
+          latitude:capturedLat,
+          longitude:capturedLng,
+          face_match_score:faceMatchScore,
+          work_type:wt,
+          ip_address:''
+        })
+      });
+      // Refresh attendance data
+      const attRes=await apiFetch('/api/attendance?user_id='+me.id+'&limit=100');
+      myAttendance=attRes.data||[];
+      setTB('in',ts);
+      document.getElementById('btnIn').className='btn done-look';
+      document.getElementById('btnIn').textContent='Checked In ✓';
+      document.getElementById('btnIn').disabled=true;
+      document.getElementById('btnOut').disabled=false;
+      document.getElementById('btnOut').className='btn danger';
+      setSbar('in',ts);
+      showAttAlert('Checked in at '+ts+' — '+(res.status==='late'?'Late':'On time'),'ok');
+    }else{
+      const rec=myAttendance.find(a=>a.date===today());
+      if(!rec?.check_in_time){showAttAlert('Check in first.','err');return;}
+      if(rec?.check_out_time){showAttAlert('Already checked out.','err');return;}
+      await apiFetch('/api/attendance/checkout/'+rec.id,{
+        method:'PUT',
+        body:JSON.stringify({latitude:capturedLat,longitude:capturedLng})
+      });
+      const attRes=await apiFetch('/api/attendance?user_id='+me.id+'&limit=100');
+      myAttendance=attRes.data||[];
+      setTB('out',ts);
+      document.getElementById('btnOut').className='btn done-look';
+      document.getElementById('btnOut').textContent='Checked Out ✓';
+      document.getElementById('btnOut').disabled=true;
+      setSbar('done',fmtTime(rec.check_in_time),ts);
+      showAttAlert('Checked out at '+ts+'. Great work!','ok');
+    }
+    buildTodayBox();buildCal();
+  }catch(e){
+    showAttAlert(e.message||'Failed to record attendance.','err');
   }
-  save(d); buildTodayBox(); buildCal();
 }
 
 function setSbar(state,inT,outT){
@@ -1174,78 +990,51 @@ function setSbar(state,inT,outT){
   if(state==='in'){bar.className='sbar in';dot.className='sb-dot g';st.textContent='Checked In';sub.textContent='Since '+inT;}
   else if(state==='done'){bar.className='sbar done';dot.className='sb-dot gr';st.textContent='Work Complete';sub.textContent=inT+' – '+outT;}
 }
-function showAttAlert(msg,type){const el=document.getElementById('markAlert');el.className='alert '+type;el.textContent=msg;el.style.display='block';setTimeout(()=>el.style.display='none',6000);}
+function showAttAlert(msg,type){const el=document.getElementById('markAlert');el.className='alert '+type;el.textContent=msg;el.style.display='block';setTimeout(()=>el.style.display='none',5000);}
 
 // ══ HISTORY ══
 function populateHistSel(){
   const sel=document.getElementById('histSel');
   const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
-  const now=new Date(); let html='';
+  const now=new Date();let html='';
   for(let i=0;i<6;i++){const dt=new Date(now.getFullYear(),now.getMonth()-i,1);html+=`<option value="${dt.getFullYear()+'-'+p(dt.getMonth()+1)}"${i===0?' selected':''}>${months[dt.getMonth()]} ${dt.getFullYear()}</option>`;}
   sel.innerHTML=html;
 }
 function renderHistory(){
   const mStr=document.getElementById('histSel')?.value||today().slice(0,7);
-  const att=myAtt().filter(a=>a.date.startsWith(mStr)).sort((a,b)=>b.date.localeCompare(a.date));
+  const att=myAttendance.filter(a=>a.date&&a.date.startsWith(mStr)).sort((a,b)=>b.date.localeCompare(a.date));
   if(att.length===0){document.getElementById('histWrap').innerHTML='<div style="text-align:center;padding:28px;font-size:12px;color:var(--muted)">No records for this month.</div>';return;}
   document.getElementById('histWrap').innerHTML=`<div class="tw"><table>
-    <thead><tr><th>Date</th><th>In</th><th>Out</th><th>Hours</th><th>Status</th><th>Score</th><th>GPS</th></tr></thead>
+    <thead><tr><th>Date</th><th>Day</th><th>In</th><th>Out</th><th>Hours</th><th>Status</th></tr></thead>
     <tbody>${att.map(a=>{
-      const ip=a.checkIn?a.checkIn.split(':').map(Number):null;
-      const op=a.checkOut?a.checkOut.split(':').map(Number):null;
-      const hrs=ip&&op?calcH(ip,op):'—';
+      const dw=new Date(a.date+'T00:00:00');
+      const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
       return `<tr>
-        <td style="font-size:11px;font-family:'DM Mono',monospace">${a.date}</td>
-        <td style="font-weight:700;color:${a.checkIn?'var(--accent)':'var(--muted)'}">${a.checkIn||'—'}</td>
-        <td style="color:var(--muted)">${a.checkOut||'—'}</td>
-        <td style="font-size:11px">${hrs}</td>
+        <td style="font-size:11px">${a.date}</td>
+        <td style="color:var(--muted)">${days[dw.getDay()]}</td>
+        <td style="font-weight:700;color:${a.check_in_time?'var(--accent)':'var(--muted)'}">${fmtTime(a.check_in_time)}</td>
+        <td style="color:var(--muted)">${fmtTime(a.check_out_time)}</td>
+        <td style="font-size:11px">${calcHours(a.check_in_time,a.check_out_time)}</td>
         <td><span class="badge ${a.status}">${cap(a.status)}</span></td>
-        <td style="font-weight:700;font-size:11px;color:var(--accent)">${a.score?a.score+'%':'—'}</td>
-        <td style="font-size:9px;color:var(--muted);font-family:'DM Mono',monospace">${a.gps||'—'}</td>
       </tr>`;
     }).join('')}</tbody></table></div>`;
 }
 
 // ══ PROFILE ══
 function renderProfile(){
-  const d=db();
-  const dept=(d.departments||[]).find(x=>x.id===me.deptId);
-  const co=(d.companies||[]).find(x=>x.id===me.companyId);
-
-  // Avatar
-  const avB=document.getElementById('profAvB');
-  if(me.facePhoto) avB.innerHTML=`<img src="${me.facePhoto}" style="width:100%;height:100%;object-fit:cover">`;
-  else avB.textContent=initials(me.name);
-
+  if(!me)return;
+  const inits=initials(me.name);
+  document.getElementById('profAvB').textContent=inits;
   document.getElementById('profNm').textContent=me.name;
-  document.getElementById('profPs').textContent=me.pos||'Employee';
-  document.getElementById('profId2').textContent=me.id;
-
-  const ft=document.getElementById('faceTag');
-  ft.textContent=me.faceEnrolled?'✓ Face Enrolled':'○ No face enrolled';
-  ft.style.background=me.faceEnrolled?'var(--abg)':'var(--off)';
-  ft.style.borderColor=me.faceEnrolled?'var(--aborder)':'var(--border)';
-  ft.style.color=me.faceEnrolled?'var(--accent)':'var(--muted)';
-
-  // Read-only details grid
+  document.getElementById('profPs').textContent=me.position||'Employee';
+  document.getElementById('profId2').textContent='ID: '+me.id;
   document.getElementById('infoGrid').innerHTML=`
     <div class="ii"><div class="ii-l">Full Name</div><div class="ii-v">${me.name}</div></div>
-    <div class="ii"><div class="ii-l">Employee ID</div><div class="ii-v" style="font-family:'DM Mono',monospace;font-size:11px">${me.id}</div></div>
-    <div class="ii"><div class="ii-l">Department</div><div class="ii-v">${dept?.name||'—'}</div></div>
-    <div class="ii"><div class="ii-l">Company</div><div class="ii-v">${co?.name||'—'}</div></div>
-    <div class="ii"><div class="ii-l">Position</div><div class="ii-v">${me.pos||'—'}</div></div>
-    <div class="ii"><div class="ii-l">Email</div><div class="ii-v" style="font-size:10px;font-family:'DM Mono',monospace">${me.email}</div></div>
-    <div class="ii"><div class="ii-l">Phone</div><div class="ii-v">${me.phone||'—'}</div></div>
-    <div class="ii"><div class="ii-l">Join Date</div><div class="ii-v">${me.joinDate||'—'}</div></div>`;
-
-  // Pre-fill edit fields
-  document.getElementById('editPhone').value=me.phone||'';
-  document.getElementById('editPos').value=me.pos||'';
-  document.getElementById('editAddr').value=me.address||'';
-
-  // Monthly stats
-  const m=new Date().getMonth()+1, y=new Date().getFullYear();
-  const mA=myAtt().filter(a=>{const dt=new Date(a.date);return dt.getMonth()+1===m&&dt.getFullYear()===y;});
+    <div class="ii"><div class="ii-l">Employee ID</div><div class="ii-v" style="font-size:11px">${me.id}</div></div>
+    <div class="ii"><div class="ii-l">Department</div><div class="ii-v">${me.department_name||'—'}</div></div>
+    <div class="ii"><div class="ii-l">Email</div><div class="ii-v" style="font-size:11px">${me.email}</div></div>`;
+  const m=new Date().getMonth()+1,y=new Date().getFullYear();
+  const mA=myAttendance.filter(a=>{const dt=new Date(a.date);return dt.getMonth()+1===m&&dt.getFullYear()===y;});
   const pr=mA.filter(a=>a.status==='present').length;
   const la=mA.filter(a=>a.status==='late').length;
   const ab=mA.filter(a=>a.status==='absent').length;
@@ -1255,80 +1044,6 @@ function renderProfile(){
     <div class="ms-i"><div class="ms-n a">${la}</div><div class="ms-l">Late</div></div>
     <div class="ms-i"><div class="ms-n r">${ab}</div><div class="ms-l">Absent</div></div>
     <div class="ms-i"><div class="ms-n g">${rate}%</div><div class="ms-l">Rate</div></div>`;
-}
-
-function toggleEditProfile(){
-  const view=document.getElementById('profViewMode');
-  const edit=document.getElementById('profEditMode');
-  const btn=document.getElementById('btnEditProf');
-  const isEditing=edit.style.display!=='none';
-  view.style.display=isEditing?'block':'none';
-  edit.style.display=isEditing?'none':'block';
-  btn.textContent=isEditing?'✏ Edit':'✕ Cancel';
-  document.getElementById('profEditErr').style.display='none';
-  document.getElementById('profEditOk').style.display='none';
-}
-
-function saveProfileEdit(){
-  const phone=document.getElementById('editPhone').value.trim();
-  const pos=document.getElementById('editPos').value.trim();
-  const addr=document.getElementById('editAddr').value.trim();
-  const err=document.getElementById('profEditErr');
-  const ok=document.getElementById('profEditOk');
-
-  const d=db();
-  const emp=d.employees.find(e=>e.id===me.id);
-  if(!emp){err.textContent='Could not find your record.';err.style.display='block';return;}
-
-  if(phone) emp.phone=phone;
-  if(pos)   emp.pos=pos;
-  if(addr)  emp.address=addr;
-  me=emp;
-  save(d);
-
-  ok.textContent='Profile updated successfully!';
-  ok.style.display='block';
-  setTimeout(()=>{
-    ok.style.display='none';
-    toggleEditProfile();
-    renderProfile();
-    // Update nav name display
-    document.getElementById('navName').textContent=me.name;
-    document.getElementById('profPs').textContent=me.pos||'Employee';
-  },1200);
-}
-
-function togglePwChange(){
-  const form=document.getElementById('pwChangeForm');
-  form.style.display=form.style.display==='none'?'block':'none';
-  document.getElementById('pwErr').style.display='none';
-  document.getElementById('pwOk').style.display='none';
-  document.getElementById('oldPw').value='';
-  document.getElementById('newPw').value='';
-  document.getElementById('newPw2').value='';
-}
-
-function saveNewPassword(){
-  const oldPw=document.getElementById('oldPw').value;
-  const newPw=document.getElementById('newPw').value;
-  const newPw2=document.getElementById('newPw2').value;
-  const err=document.getElementById('pwErr');
-  const ok=document.getElementById('pwOk');
-  err.style.display='none';
-
-  if(!oldPw||!newPw||!newPw2){err.textContent='All fields are required.';err.style.display='block';return;}
-  if(newPw.length<6){err.textContent='New password must be at least 6 characters.';err.style.display='block';return;}
-  if(newPw!==newPw2){err.textContent='New passwords do not match.';err.style.display='block';return;}
-
-  const d=db();
-  const emp=d.employees.find(e=>e.id===me.id);
-  if(!emp||emp.pw!==oldPw){err.textContent='Current password is incorrect.';err.style.display='block';return;}
-
-  emp.pw=newPw;
-  save(d);
-  ok.textContent='Password changed successfully!';
-  ok.style.display='block';
-  setTimeout(()=>togglePwChange(),2000);
 }
 </script>
 </body>
