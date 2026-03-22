@@ -800,11 +800,13 @@ async function doRegEmp(){
   if(!deptId){showMsg(err,'Please select a department.');return;}
   try{
     // Register via API — pass face descriptor for biometric storage
+    const resolvedAdminId=lockedCompanyId||joinCoId||null;
     const data=await apiFetch('/api/auth/register',{
       method:'POST',
       body:JSON.stringify({
         name:first+' '+last, email, password:pw, role:'employee',
         department_id:deptId,
+        admin_id:resolvedAdminId,
         face_descriptor:regFaceDescriptor,
         face_photo:regFaceBase64,
         phone, position:pos||'Employee'
