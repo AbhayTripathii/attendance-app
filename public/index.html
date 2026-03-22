@@ -379,7 +379,7 @@
 const API = 'https://attendance-app-at.up.railway.app';
 
 async function apiFetch(path, options={}){
-  const token=sessionStorage.getItem('token');
+  const token=localStorage.getItem('at_token');
   const headers={'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{}),...(options.headers||{})};
   const res=await fetch(API+path,{...options,headers});
   const data=await res.json();
@@ -738,7 +738,7 @@ async function doLogin(){
       method:'POST',
       body:JSON.stringify({email,password:pw,role:loginRole})
     });
-    sessionStorage.setItem('token',data.token);
+    localStorage.setItem('at_token',data.token);
     sessionStorage.setItem('at_session',JSON.stringify({
       role:data.user.role,
       id:data.user.id,
@@ -775,7 +775,7 @@ async function doRegAdmin(){
       method:'POST',
       body:JSON.stringify({email,password:pw,role:'admin'})
     });
-    sessionStorage.setItem('token',loginData.token);
+    localStorage.setItem('at_token',loginData.token);
     sessionStorage.setItem('at_session',JSON.stringify({role:'admin',id:loginData.user.id,name:loginData.user.name}));
     setTimeout(()=>location.href='admin.html',1200);
   }catch(e){
@@ -810,18 +810,26 @@ async function doRegEmp(){
         phone, position:pos||'Employee'
       })
     });
-    showMsg(ok,`Welcome, ${first}! Signing you in…`,'ok');
+    showMsg(ok,'Registered! Signing you in...','ok');
     // Auto login
     const loginData=await apiFetch('/api/auth/login',{
       method:'POST',
       body:JSON.stringify({email,password:pw,role:'employee'})
     });
-    sessionStorage.setItem('token',loginData.token);
+    if(!loginData.token){
+      showMsg(err,'Registration OK but login failed. Please sign in manually.','err');
+      setTimeout(()=>switchMode('login'),2000);
+      return;
+    }
+    localStorage.setItem('at_token',loginData.token);
     sessionStorage.setItem('at_session',JSON.stringify({
-      role:'employee',id:loginData.user.id,name:loginData.user.name,
+      role:'employee',
+      id:loginData.user.id,
+      name:loginData.user.name,
       department_id:loginData.user.department_id
     }));
-    setTimeout(()=>location.href='employee.html',1400);
+    // Small delay then redirect
+    setTimeout(function(){location.href='employee.html';},1500);
   }catch(e){
     showMsg(err,e.message||'Registration failed.');
   }
