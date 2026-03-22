@@ -13,8 +13,14 @@ const JWT_SECRET = process.env.JWT_SECRET || 'attendance_secret_key_2024';
 // ─── Run migrations on startup ────────────────────────────────
 (async () => {
   try {
-    await db.execute(`ALTER TABLE users ADD COLUMN IF NOT EXISTS company_name VARCHAR(200) DEFAULT NULL`);
-    console.log('✅ DB migration: company_name column ready');
+    // Check if column exists first, then add if not
+    const [cols] = await db.execute(`SHOW COLUMNS FROM users LIKE 'company_name'`);
+    if (cols.length === 0) {
+      await db.execute(`ALTER TABLE users ADD COLUMN company_name VARCHAR(200) DEFAULT NULL`);
+      console.log('✅ DB migration: company_name column added');
+    } else {
+      console.log('✅ DB migration: company_name column already exists');
+    }
   } catch(e) { console.warn('Migration note:', e.message); }
 })();
 
@@ -133,7 +139,7 @@ router.post('/register', async (req, res) => {
     } catch(colErr) {
       // If company_name column doesn't exist yet, insert without it
       if (colErr.code === 'ER_BAD_FIELD_ERROR') {
-        await db.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS company_name VARCHAR(200) DEFAULT NULL');
+        await db.execute('ALTER TABLE users ADD COLUMN company_name VARCHAR(200) DEFAULT NULL');
         [result] = await db.execute(
           'INSERT INTO users (name, email, password, role, department_id, company_name) VALUES (?, ?, ?, ?, ?, ?)',
           [name.trim(), email.trim().toLowerCase(), hashedPassword, userRole, deptId, company_name||null]

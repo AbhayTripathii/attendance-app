@@ -14,7 +14,7 @@ router.get('/monthly', async (req, res) => {
 
     const [rows] = await db.execute(`
       SELECT
-        e.id, e.emp_code, e.name AS employee_name,
+        u.id, u.name AS employee_name,
         d.name AS department_name,
         COUNT(CASE WHEN a.status = 'present' THEN 1 END) AS days_present,
         COUNT(CASE WHEN a.status = 'absent'  THEN 1 END) AS days_absent,
@@ -28,13 +28,13 @@ router.get('/monthly', async (req, res) => {
           (COUNT(CASE WHEN a.status IN ('present','late','wfh') THEN 1 END)
           / NULLIF(COUNT(*),0)) * 100, 1
         ) AS attendance_rate
-      FROM employees e
-      LEFT JOIN departments d ON e.department_id = d.id
-      LEFT JOIN attendance a ON e.id = a.employee_id
+      FROM users u
+      LEFT JOIN departments d ON u.department_id = d.id
+      LEFT JOIN attendance a ON u.id = a.user_id
         AND MONTH(a.check_in_time) = ? AND YEAR(a.check_in_time) = ?
-      WHERE e.is_active = 1
-      GROUP BY e.id, e.emp_code, e.name, d.name
-      ORDER BY e.name
+      WHERE u.role = 'employee'
+      GROUP BY u.id, u.name, d.name
+      ORDER BY u.name
     `, [month, year]);
 
     const summary = {
@@ -57,17 +57,17 @@ router.get('/daily', async (req, res) => {
     const date = req.query.date || new Date().toISOString().split('T')[0];
     const [rows] = await db.execute(`
       SELECT
-        e.id, e.emp_code, e.name,
+        u.id, u.name,
         d.name AS department_name,
         a.check_in_time, a.check_out_time,
         a.face_match_score, a.status, a.work_type,
         a.check_in_lat, a.check_in_lng,
         TIMESTAMPDIFF(MINUTE, a.check_in_time, IFNULL(a.check_out_time, NOW())) AS minutes_worked
-      FROM employees e
-      LEFT JOIN departments d ON e.department_id = d.id
-      LEFT JOIN attendance a ON e.id = a.employee_id AND DATE(a.check_in_time) = ?
-      WHERE e.is_active = 1
-      ORDER BY COALESCE(a.check_in_time, '9999-12-31'), e.name
+      FROM users u
+      LEFT JOIN departments d ON u.department_id = d.id
+      LEFT JOIN attendance a ON u.id = a.user_id AND DATE(a.check_in_time) = ?
+      WHERE u.role = 'employee'
+      ORDER BY COALESCE(a.check_in_time, '9999-12-31'), u.name
     `, [date]);
 
     const summary = {
@@ -91,14 +91,14 @@ router.get('/department-summary', async (req, res) => {
     const [rows] = await db.execute(`
       SELECT
         d.id, d.name AS department,
-        COUNT(DISTINCT e.id) AS total_employees,
+        COUNT(DISTINCT u.id) AS total_employees,
         ROUND(AVG(
           CASE WHEN a.status IN ('present','late','wfh') THEN 100 ELSE 0 END
         ), 1) AS attendance_rate,
         ROUND(AVG(a.face_match_score), 1) AS avg_face_score
       FROM departments d
-      LEFT JOIN employees e ON d.id = e.department_id AND e.is_active = 1
-      LEFT JOIN attendance a ON e.id = a.employee_id
+      LEFT JOIN users u ON d.id = u.department_id AND u.role = 'employee'
+      LEFT JOIN attendance a ON u.id = a.user_id
         AND (? IS NULL OR MONTH(a.check_in_time) = ?)
         AND (? IS NULL OR YEAR(a.check_in_time) = ?)
       GROUP BY d.id, d.name ORDER BY d.name
