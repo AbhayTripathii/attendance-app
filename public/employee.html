@@ -907,22 +907,43 @@ let gpsWatchId=null;
 function getGPS(){
   const btn=document.getElementById('btnGps');
   btn.textContent='Locating...';btn.disabled=true;
-  if(!navigator.geolocation){setGPS('28.613900','77.209000',500);return;}
-  if(gpsWatchId)navigator.geolocation.clearWatch(gpsWatchId);
+  if(!navigator.geolocation){
+    setGPS('28.613900','77.209000',500);
+    return;
+  }
+  if(gpsWatchId) navigator.geolocation.clearWatch(gpsWatchId);
+
+  let gotLocation=false;
   let bestAcc=Infinity;
+
+  // Timeout after 8 seconds — use whatever we have or default
+  const fallback=setTimeout(function(){
+    navigator.geolocation.clearWatch(gpsWatchId);
+    if(!gotLocation) setGPS('28.613900','77.209000',500);
+  },8000);
+
   gpsWatchId=navigator.geolocation.watchPosition(
     function(pos){
+      gotLocation=true;
       if(pos.coords.accuracy<bestAcc){
         bestAcc=pos.coords.accuracy;
+        capturedLat=pos.coords.latitude;
+        capturedLng=pos.coords.longitude;
         setGPS(pos.coords.latitude.toFixed(6),pos.coords.longitude.toFixed(6),Math.round(pos.coords.accuracy));
-        capturedLat=pos.coords.latitude;capturedLng=pos.coords.longitude;
-        if(pos.coords.accuracy<=20)navigator.geolocation.clearWatch(gpsWatchId);
+      }
+      // Stop as soon as we get anything reasonable
+      if(pos.coords.accuracy<=50){
+        clearTimeout(fallback);
+        navigator.geolocation.clearWatch(gpsWatchId);
       }
     },
-    function(){setGPS('28.613900','77.209000',500);},
-    {enableHighAccuracy:true,timeout:15000,maximumAge:0}
+    function(err){
+      clearTimeout(fallback);
+      navigator.geolocation.clearWatch(gpsWatchId);
+      setGPS('28.613900','77.209000',500);
+    },
+    {enableHighAccuracy:true,timeout:8000,maximumAge:10000}
   );
-  setTimeout(function(){navigator.geolocation.clearWatch(gpsWatchId);},20000);
 }
 function setGPS(lat,lng,acc){
   capturedLat=parseFloat(lat);capturedLng=parseFloat(lng);
