@@ -151,7 +151,13 @@ router.post('/register', async (req, res) => {
     if (userRole === 'employee' && face_descriptor) {
       try {
         const crypto = require('crypto');
-        const encKey = process.env.FACE_ENCRYPT_KEY || '0'.repeat(64);
+        // Ensure key is exactly 32 bytes (64 hex chars)
+        let encKey = process.env.FACE_ENCRYPT_KEY || '';
+        if (!encKey || encKey.length < 64) {
+          encKey = crypto.createHash('sha256').update('attendance_face_key_2024').digest('hex');
+        }
+        encKey = encKey.substring(0, 64);
+
         const iv = crypto.randomBytes(16);
         const cipher = crypto.createCipheriv('aes-256-gcm', Buffer.from(encKey, 'hex'), iv);
         const descriptorStr = JSON.stringify(face_descriptor);
@@ -164,8 +170,10 @@ router.post('/register', async (req, res) => {
            ON DUPLICATE KEY UPDATE face_id_encrypted=VALUES(face_id_encrypted), iv=VALUES(iv), auth_tag=VALUES(auth_tag)`,
           [result.insertId, encrypted, iv.toString('hex'), authTag.toString('hex')]
         );
+        console.log('✅ Face data stored for user', result.insertId);
       } catch (faceErr) {
-        console.warn('Face data storage failed:', faceErr.message);
+        console.warn('Face data storage failed (non-fatal):', faceErr.message);
+        // Registration still succeeds even if face storage fails
       }
     }
 
@@ -220,7 +228,11 @@ router.get('/me', verifyToken, async (req, res) => {
         const [faceRows] = await db.execute('SELECT face_id_encrypted, iv, auth_tag FROM face_data WHERE employee_id = ?', [req.user.id]);
         if (faceRows.length > 0) {
           const crypto = require('crypto');
-          const encKey = process.env.FACE_ENCRYPT_KEY || '0'.repeat(64);
+          let encKey = process.env.FACE_ENCRYPT_KEY || '';
+          if (!encKey || encKey.length < 64) {
+            encKey = crypto.createHash('sha256').update('attendance_face_key_2024').digest('hex');
+          }
+          encKey = encKey.substring(0, 64);
           const decipher = crypto.createDecipheriv('aes-256-gcm', Buffer.from(encKey, 'hex'), Buffer.from(faceRows[0].iv, 'hex'));
           decipher.setAuthTag(Buffer.from(faceRows[0].auth_tag, 'hex'));
           let decrypted = decipher.update(faceRows[0].face_id_encrypted, 'hex', 'utf8');
