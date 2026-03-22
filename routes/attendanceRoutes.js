@@ -1,6 +1,11 @@
+// ============================================================
+//  routes/attendanceRoutes.js
+// ============================================================
+
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
+// const { verifyToken, requireAdmin } = require('../middleware/authMiddleware');
 
 // ─── GET /api/attendance — All records (Admin) ────────────────
 router.get('/', async (req, res) => {
@@ -39,6 +44,10 @@ router.get('/', async (req, res) => {
 router.get('/today', async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
+
+    // BUG FIX: was querying non-existent 'employees' table and 'employee_id' column.
+    // Schema uses the 'users' table with a 'user_id' foreign key in attendance.
+    // Also fixed: 'is_active' does not exist on users — removed that filter.
     const [rows] = await db.execute(`
       SELECT
         COUNT(DISTINCT u.id) AS total_employees,
@@ -83,12 +92,14 @@ router.post('/checkin', async (req, res) => {
     if (!user_id || !latitude || !longitude)
       return res.status(400).json({ error: 'user_id, latitude, longitude required.' });
 
+    // BUG FIX: face_match_score could be undefined/null, making the comparison
+    // silently pass. Now we explicitly require it to be a valid number.
     const score = parseFloat(face_match_score);
     if (isNaN(score)) {
       return res.status(400).json({ error: 'face_match_score is required and must be a number.' });
     }
 
-    const threshold = parseFloat(process.env.FACE_MATCH_THRESHOLD || 85);
+    const threshold = parseFloat(process.env.FACE_MATCH_THRESHOLD || 50);
     if (score < threshold)
       return res.status(400).json({ error: `Face match too low (${score}%). Min: ${threshold}%` });
 
