@@ -13,13 +13,15 @@ const JWT_SECRET = process.env.JWT_SECRET || 'attendance_secret_key_2024';
 // ─── Run migrations on startup ────────────────────────────────
 (async () => {
   try {
-    // Check if column exists first, then add if not
     const [cols] = await db.execute(`SHOW COLUMNS FROM users LIKE 'company_name'`);
     if (cols.length === 0) {
       await db.execute(`ALTER TABLE users ADD COLUMN company_name VARCHAR(200) DEFAULT NULL`);
       console.log('✅ DB migration: company_name column added');
-    } else {
-      console.log('✅ DB migration: company_name column already exists');
+    }
+    const [cols2] = await db.execute(`SHOW COLUMNS FROM users LIKE 'admin_id'`);
+    if (cols2.length === 0) {
+      await db.execute(`ALTER TABLE users ADD COLUMN admin_id INT DEFAULT NULL`);
+      console.log('✅ DB migration: admin_id column added');
     }
   } catch(e) { console.warn('Migration note:', e.message); }
 })();
@@ -130,19 +132,27 @@ router.post('/register', async (req, res) => {
     // If admin registering, create a department for their company automatically
     let deptId = department_id || null;
 
+    // For employees, find which admin owns the department
+    let resolvedAdminId = null;
+    if (userRole === 'employee' && deptId) {
+      // admin_id is passed from the join link (?co=adminId)
+      const { admin_id } = req.body;
+      resolvedAdminId = admin_id || null;
+    }
+
     let result;
     try {
       [result] = await db.execute(
-        'INSERT INTO users (name, email, password, role, department_id, company_name) VALUES (?, ?, ?, ?, ?, ?)',
-        [name.trim(), email.trim().toLowerCase(), hashedPassword, userRole, deptId, company_name||null]
+        'INSERT INTO users (name, email, password, role, department_id, company_name, admin_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [name.trim(), email.trim().toLowerCase(), hashedPassword, userRole, deptId, company_name||null, resolvedAdminId]
       );
     } catch(colErr) {
-      // If company_name column doesn't exist yet, insert without it
       if (colErr.code === 'ER_BAD_FIELD_ERROR') {
         await db.execute('ALTER TABLE users ADD COLUMN company_name VARCHAR(200) DEFAULT NULL');
+        await db.execute('ALTER TABLE users ADD COLUMN admin_id INT DEFAULT NULL');
         [result] = await db.execute(
-          'INSERT INTO users (name, email, password, role, department_id, company_name) VALUES (?, ?, ?, ?, ?, ?)',
-          [name.trim(), email.trim().toLowerCase(), hashedPassword, userRole, deptId, company_name||null]
+          'INSERT INTO users (name, email, password, role, department_id, company_name, admin_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [name.trim(), email.trim().toLowerCase(), hashedPassword, userRole, deptId, company_name||null, resolvedAdminId]
         );
       } else throw colErr;
     }
@@ -213,7 +223,7 @@ router.post('/change-password', verifyToken, async (req, res) => {
 router.get('/me', verifyToken, async (req, res) => {
   try {
     const [rows] = await db.execute(
-      `SELECT u.id, u.name, u.email, u.role, u.department_id, u.company_name,
+      `SELECT u.id, u.name, u.email, u.role, u.department_id, u.company_name, u.admin_id,
               d.name AS department_name
        FROM users u LEFT JOIN departments d ON u.department_id = d.id
        WHERE u.id = ? LIMIT 1`,
@@ -275,5 +285,21 @@ router.delete('/departments/:id', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to delete department.' });
   }
 });
+
+
+// ─── PUT /api/auth/company — update company name ─────────────
+router.put('/company', verifyToken, async (req, res) => {
+  try {
+    const { company_name } = req.body;
+    if (!company_name) return res.status(400).json({ error: 'Company name required.' });
+    await db.execute('UPDATE users SET company_name = ? WHERE id = ?', [company_name.trim(), req.user.id]);
+    res.json({ message: 'Company name updated.', company_name: company_name.trim() });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update company name.' });
+  }
+});
+
+// ─── GET /api/auth/departments — filter by admin_id if provided ─
+// Already defined above, but we need to also add filter by admin_id
 
 module.exports = router;
