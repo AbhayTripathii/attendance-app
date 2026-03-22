@@ -517,27 +517,29 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   try{
     const me = await apiFetch('/api/auth/me');
     const coName = me.user.company_name || sess.name + "'s Company";
-    // Generate a readable company code: first 2 letters of name + user id padded
     const nameTag = (coName||'CO').replace(/[^a-zA-Z]/g,'').substring(0,2).toUpperCase()||'CO';
     const coCode = nameTag + '-' + String(sess.id).padStart(6,'0');
     document.getElementById('sbCompany').textContent = coName;
     document.getElementById('sbCoCode') && (document.getElementById('sbCoCode').textContent = coCode);
     document.getElementById('coCodeDisplay') && (document.getElementById('coCodeDisplay').textContent = coCode);
-    // Store globally
     window._companyName = coName;
     window._companyCode = coCode;
     window._adminId = String(sess.id);
+    // Pre-fill settings company name field
+    const cnField = document.getElementById('setCompanyName');
+    if(cnField) cnField.value = coName;
   }catch(e){
     const fallbackCode = 'CO-'+String(sess.id).padStart(6,'0');
-    window._companyName='My Company';
-    window._companyCode=fallbackCode;
-    window._adminId=String(sess.id);
-    document.getElementById('sbCompany').textContent='My Company';
+    window._companyName = sess.name+"'s Company";
+    window._companyCode = fallbackCode;
+    window._adminId = String(sess.id);
+    document.getElementById('sbCompany').textContent = sess.name+"'s Company";
   }
 
   await loadAllData();
   document.getElementById('wizardOverlay').style.display='none';
   refreshAll();
+  loadWorkHours();
   populateAttDeptFilter();
 });
 
@@ -659,9 +661,10 @@ function nav(name,el){
 async function renderDashboard(){
   try{
     // Refresh data
+    const adminId=window._adminId||String(sess.id);
     const [attRes, empRes] = await Promise.all([
       apiFetch('/api/attendance?date='+today()),
-      apiFetch('/api/attendance/employees')
+      apiFetch('/api/attendance/employees?admin_id='+adminId)
     ]);
     allAtt  = attRes.data || [];
     allEmps = empRes.data || [];
@@ -713,7 +716,8 @@ async function renderDashboard(){
 // ══ EMPLOYEES ════════════════════════════════
 async function renderEmps(){
   try{
-    const res=await apiFetch('/api/attendance/employees');
+    const adminId=window._adminId||String(sess.id);
+    const res=await apiFetch('/api/attendance/employees?admin_id='+adminId);
     allEmps=res.data||[];
   }catch(e){}
   const q=(document.getElementById('empSearch')?.value||'').toLowerCase();
@@ -911,6 +915,72 @@ async function renderReports(){
 }
 
 // ══ HELPERS ═══════════════════════════════════
+
+// ══ SETTINGS ═════════════════════════════════
+async function saveCompanyName(){
+  const name=document.getElementById('setCompanyName').value.trim();
+  if(!name){toast('Enter a company name.');return;}
+  try{
+    await apiFetch('/api/auth/company',{method:'PUT',body:JSON.stringify({company_name:name})});
+    window._companyName=name;
+    document.getElementById('sbCompany').textContent=name;
+    toast('✅ Company name saved: '+name);
+  }catch(e){toast('Error: '+e.message);}
+}
+
+function saveWorkHours(){
+  const start=document.getElementById('setStartTime')?.value||'09:00';
+  const end=document.getElementById('setEndTime')?.value||'17:00';
+  const grace=document.getElementById('setGrace')?.value||'15';
+  localStorage.setItem('work_hours',JSON.stringify({start,end,grace}));
+  const okEl=document.getElementById('setOk');
+  if(okEl){okEl.style.display='inline';setTimeout(()=>okEl.style.display='none',3000);}
+  toast('✅ Work hours saved: '+start+' – '+end+' (grace: '+grace+' min)');
+}
+
+async function saveAdminName(){
+  const name=document.getElementById('setAdminName')?.value.trim();
+  if(!name){toast('Enter your name.');return;}
+  try{
+    await apiFetch('/api/auth/me',{method:'PUT',body:JSON.stringify({name})});
+    document.getElementById('sbName').textContent=name;
+    toast('✅ Name updated.');
+  }catch(e){
+    // Fallback — just update locally
+    document.getElementById('sbName').textContent=name;
+    toast('Name updated locally.');
+  }
+}
+
+async function changeAdminPw(){
+  const current=document.getElementById('setOldPw')?.value;
+  const newPw=document.getElementById('setNewPw')?.value;
+  if(!current||!newPw){toast('Enter both passwords.');return;}
+  if(newPw.length<6){toast('New password must be 6+ characters.');return;}
+  try{
+    await apiFetch('/api/auth/change-password',{method:'POST',body:JSON.stringify({oldPassword:current,newPassword:newPw})});
+    toast('✅ Password changed successfully.');
+    document.getElementById('setOldPw').value='';
+    document.getElementById('setNewPw').value='';
+  }catch(e){toast('Error: '+e.message);}
+}
+
+// Load saved work hours into settings fields on page load
+function loadWorkHours(){
+  try{
+    const wh=JSON.parse(localStorage.getItem('work_hours')||'{"start":"09:00","end":"17:00","grace":"15"}');
+    if(document.getElementById('setStartTime')) document.getElementById('setStartTime').value=wh.start||'09:00';
+    if(document.getElementById('setEndTime')) document.getElementById('setEndTime').value=wh.end||'17:00';
+    if(document.getElementById('setGrace')) document.getElementById('setGrace').value=wh.grace||'15';
+    // Pre-fill company name
+    const cn=document.getElementById('setCompanyName');
+    if(cn&&window._companyName) cn.value=window._companyName;
+    // Pre-fill admin name
+    const an=document.getElementById('setAdminName');
+    if(an&&sess.name) an.value=sess.name;
+  }catch(e){}
+}
+
 function today(){ return new Date().toISOString().split('T')[0]; }
 function initials(n){ return n?n.split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase():'?'; }
 function cap(s){ return s?s.charAt(0).toUpperCase()+s.slice(1):''; }
