@@ -302,8 +302,7 @@
   <div class="topbar">
     <div class="tb-l"><h2 id="pgTitle">Dashboard</h2><p id="pgDate"></p></div>
     <div class="tb-r">
-      <button class="btn" onclick="openWizard()">⚙ Setup</button>
-      <button class="btn primary" onclick="nav('departments',null)">Invite Employees</button>
+      <button class="btn primary" onclick="nav('departments',document.querySelector('.nav-item[onclick*=departments]'))">Invite Employees</button>
     </div>
   </div>
   <div class="content">
@@ -362,21 +361,6 @@
 
     <!-- DEPARTMENTS -->
     <div class="sec" id="sec-departments">
-
-      <!-- Company Code banner — employees need this to register -->
-      <div class="co-code-banner">
-        <div class="co-code-left">
-          <h4>🔑 Company Code</h4>
-          <p>Share this code with employees so they can find your company<br>when registering on the <strong>Register → Employee</strong> page.</p>
-        </div>
-        <div class="co-code-copy">
-          <div class="co-code-value" id="coCodeDisplay" onclick="copyCoCode()" title="Click to copy">—</div>
-          <div>
-            <button class="btn sm primary" onclick="copyCoCode()" id="coCodeCopyBtn">Copy Code</button>
-            <div class="co-code-hint" style="margin-top:5px;text-align:center" id="coCodeCopied" style="display:none">✓ Copied!</div>
-          </div>
-        </div>
-      </div>
 
       <div id="coCodeBanner"></div>
       <div class="dept-grid" id="deptGrid"></div>
@@ -533,13 +517,23 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   try{
     const me = await apiFetch('/api/auth/me');
     const coName = me.user.company_name || sess.name + "'s Company";
+    // Generate a readable company code: first 2 letters of name + user id padded
+    const nameTag = (coName||'CO').replace(/[^a-zA-Z]/g,'').substring(0,2).toUpperCase()||'CO';
+    const coCode = nameTag + '-' + String(sess.id).padStart(6,'0');
     document.getElementById('sbCompany').textContent = coName;
-    document.getElementById('sbCoCode') && (document.getElementById('sbCoCode').textContent = 'ID: '+sess.id);
-    document.getElementById('coCodeDisplay') && (document.getElementById('coCodeDisplay').textContent = sess.id);
-    // Store company name globally
+    document.getElementById('sbCoCode') && (document.getElementById('sbCoCode').textContent = coCode);
+    document.getElementById('coCodeDisplay') && (document.getElementById('coCodeDisplay').textContent = coCode);
+    // Store globally
     window._companyName = coName;
-    window._companyCode = String(sess.id);
-  }catch(e){ window._companyName='My Company'; window._companyCode=String(sess.id); }
+    window._companyCode = coCode;
+    window._adminId = String(sess.id);
+  }catch(e){
+    const fallbackCode = 'CO-'+String(sess.id).padStart(6,'0');
+    window._companyName='My Company';
+    window._companyCode=fallbackCode;
+    window._adminId=String(sess.id);
+    document.getElementById('sbCompany').textContent='My Company';
+  }
 
   await loadAllData();
   document.getElementById('wizardOverlay').style.display='none';
@@ -632,9 +626,9 @@ async function removePendingDept(n){
 
 function buildInviteList(){
   const base=location.origin+location.pathname.replace('admin.html','')+'index.html';
-  const coCode=window._companyCode||String(sess.id);
+  const adminId=window._adminId||String(sess.id);
   document.getElementById('inviteList').innerHTML=allDepts.map((dep,i)=>{
-    const link=`${base}?join=${dep.id}&co=${coCode}`;
+    const link=`${base}?join=${dep.id}&co=${adminId}`;
     return `<div class="invite-item">
       <div class="invite-dept">${dep.name}</div>
       <div class="invite-link-row">
@@ -807,22 +801,23 @@ async function renderDepts(){
   const base=location.origin+location.pathname.replace('admin.html','')+'index.html';
 
   // Show company code banner
-  const coCode=window._companyCode||String(sess.id);
+  const coCode=window._companyCode||('CO-'+String(sess.id).padStart(6,'0'));
+  const adminId=window._adminId||String(sess.id);
   const coCodeBanner=document.getElementById('coCodeBanner');
   if(coCodeBanner){
-    coCodeBanner.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:var(--abg);border:1px solid var(--aborder);border-radius:4px;margin-bottom:18px">
+    coCodeBanner.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;background:var(--abg);border:1px solid var(--aborder);border-radius:4px;margin-bottom:18px;flex-wrap:wrap;gap:12px">
       <div>
-        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px">🔑 Company Code</div>
-        <div style="font-size:13px;font-weight:700;color:var(--accent);font-family:monospace">${coCode}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px">Share this code with employees so they can find your company when registering</div>
+        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">🔑 Company Code</div>
+        <div style="font-size:18px;font-weight:700;color:var(--accent);font-family:monospace;letter-spacing:2px">${coCode}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Share this with employees — they enter it when registering to find your company</div>
       </div>
-      <button class="btn sm primary" onclick="copyCompanyCode('${coCode}',this)" style="white-space:nowrap">Copy Code</button>
+      <button class="btn sm primary" onclick="copyCompanyCode('${coCode}',this)" style="white-space:nowrap;padding:10px 20px">Copy Code</button>
     </div>`;
   }
 
   document.getElementById('deptGrid').innerHTML=allDepts.map(dep=>{
     const cnt=allEmps.filter(e=>e.department_id===dep.id).length;
-    const link=`${base}?join=${dep.id}&co=${coCode}`;
+    const link=`${base}?join=${dep.id}&co=${adminId}`;
     return `<div class="dcard">
       <div class="dcard-n">${dep.name}</div>
       <div class="dcard-m">${cnt} employee${cnt!==1?'s':''} enrolled</div>

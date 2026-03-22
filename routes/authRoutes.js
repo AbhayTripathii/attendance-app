@@ -34,16 +34,27 @@ const verifyToken = (req, res, next) => {
 router.get('/departments', async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT id, name, description FROM departments ORDER BY name');
-    // Also return company info if token provided
     let company_name = null;
-    const token = (req.headers['authorization']||'').split(' ')[1];
-    if (token) {
+
+    // If company_id passed (admin's user ID), get their company name
+    if (req.query.company_id) {
       try {
-        const jwt = require('jsonwebtoken');
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'attendance_secret_key_2024');
-        const [uRows] = await db.execute('SELECT company_name FROM users WHERE id = ?', [decoded.id]);
-        if (uRows.length > 0) company_name = uRows[0].company_name;
+        const [uRows] = await db.execute('SELECT company_name, name FROM users WHERE id = ? AND role = ?', [req.query.company_id, 'admin']);
+        if (uRows.length > 0) {
+          company_name = uRows[0].company_name || uRows[0].name + "'s Company";
+        }
       } catch(e) {}
+    } else {
+      // Get from token if available
+      const token = (req.headers['authorization']||'').split(' ')[1];
+      if (token) {
+        try {
+          const jwt = require('jsonwebtoken');
+          const decoded = jwt.verify(token, JWT_SECRET);
+          const [uRows] = await db.execute('SELECT company_name FROM users WHERE id = ?', [decoded.id]);
+          if (uRows.length > 0) company_name = uRows[0].company_name;
+        } catch(e) {}
+      }
     }
     res.json({ departments: rows, company_name });
   } catch (err) {
@@ -113,10 +124,22 @@ router.post('/register', async (req, res) => {
     // If admin registering, create a department for their company automatically
     let deptId = department_id || null;
 
-    const [result] = await db.execute(
-      'INSERT INTO users (name, email, password, role, department_id, company_name) VALUES (?, ?, ?, ?, ?, ?)',
-      [name.trim(), email.trim().toLowerCase(), hashedPassword, userRole, deptId, company_name||null]
-    );
+    let result;
+    try {
+      [result] = await db.execute(
+        'INSERT INTO users (name, email, password, role, department_id, company_name) VALUES (?, ?, ?, ?, ?, ?)',
+        [name.trim(), email.trim().toLowerCase(), hashedPassword, userRole, deptId, company_name||null]
+      );
+    } catch(colErr) {
+      // If company_name column doesn't exist yet, insert without it
+      if (colErr.code === 'ER_BAD_FIELD_ERROR') {
+        await db.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS company_name VARCHAR(200) DEFAULT NULL');
+        [result] = await db.execute(
+          'INSERT INTO users (name, email, password, role, department_id, company_name) VALUES (?, ?, ?, ?, ?, ?)',
+          [name.trim(), email.trim().toLowerCase(), hashedPassword, userRole, deptId, company_name||null]
+        );
+      } else throw colErr;
+    }
 
     // If employee with face data, store face descriptor in face_data table
     if (userRole === 'employee' && face_descriptor) {

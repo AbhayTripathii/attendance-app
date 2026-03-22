@@ -15,12 +15,12 @@
       --amber:#f5a623;
       --white:#fff;
     }
-    body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;overflow-x:hidden}
+    body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-x:hidden}
 
     /* ── noise grain overlay ── */
     body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");pointer-events:none;z-index:0}
 
-    .wrap{position:relative;z-index:1;width:100%;max-width:880px;display:grid;grid-template-columns:1fr 1fr;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 0 80px rgba(0,0,0,.8),0 0 1px rgba(61,220,132,.1)}
+    .wrap{position:relative;z-index:1;width:100%;max-width:880px;display:grid;grid-template-columns:1fr 1fr;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:visible;box-shadow:0 0 80px rgba(0,0,0,.8),0 0 1px rgba(61,220,132,.1);margin:20px auto}
 
     /* ── LEFT PANEL ── */
     .left{padding:52px 44px;background:linear-gradient(160deg,#0d1f15 0%,#0a1a10 60%,#050e08 100%);display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
@@ -36,7 +36,7 @@
     .left-f{font-family:'DM Mono',monospace;font-size:9px;color:rgba(255,255,255,.2);letter-spacing:1px}
 
     /* ── RIGHT PANEL ── */
-    .right{padding:40px 38px;display:flex;flex-direction:column;justify-content:center;max-height:90vh;overflow-y:auto}
+    .right{padding:40px 38px;display:flex;flex-direction:column;justify-content:flex-start;overflow-y:visible}
     .right::-webkit-scrollbar{width:3px}
     .right::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 
@@ -431,18 +431,19 @@ window.addEventListener('DOMContentLoaded',async()=>{
     document.getElementById('reg-role-row-a') && (document.getElementById('reg-role-row-a').style.display='none');
     document.getElementById('reg-role-row-e') && (document.getElementById('reg-role-row-e').style.display='none');
     document.getElementById('companyLookupBlock') && (document.getElementById('companyLookupBlock').style.display='none');
+    // joinCoId is the admin's user ID (passed as ?co=adminId in invite links)
     lockedCompanyId=joinCoId;
-    // Load dept name from API
     try{
       const data=await apiFetch('/api/auth/departments?company_id='+joinCoId);
-      const dept=(data.departments||[]).find(x=>x.id==joinDeptId);
+      const dept=(data.departments||[]).find(x=>String(x.id)===String(joinDeptId));
       if(dept){
         document.getElementById('joinNotice').style.display='block';
-        document.getElementById('joinCompanyName').textContent=dept.company_name+' · '+dept.name;
+        const coName=data.company_name||'Your Company';
+        document.getElementById('joinCompanyName').textContent=coName+' · '+dept.name;
         lockedDeptName=dept.name;
       }
       populateEmpDeptsFromData(data.departments||[],joinDeptId);
-    }catch(e){ console.warn('Could not load dept info'); }
+    }catch(e){ console.warn('Could not load dept info:', e.message); }
   } else {
     // load all depts for dropdown
     try{
@@ -488,11 +489,18 @@ async function lookupCompany(){
   errEl.style.display='none';
   if(!code){errEl.textContent='Enter a company code.';errEl.style.display='block';return;}
   try{
-    const data=await apiFetch('/api/auth/departments?company_id='+code);
-    if(!data.departments||data.departments.length===0){errEl.textContent='Company not found.';errEl.style.display='block';return;}
-    lockedCompanyId=code;
+    // Company code format: "AT-000001" → extract numeric id, or just try as-is
+    // Extract the numeric admin ID from code like "AT-000001" → 1
+    let adminId = code;
+    const match = code.match(/(\d+)$/);
+    if(match) adminId = String(parseInt(match[1]));
+
+    const data=await apiFetch('/api/auth/departments?company_id='+adminId);
+    if(!data.departments||data.departments.length===0){errEl.textContent='Company not found. Check the code.';errEl.style.display='block';return;}
+    lockedCompanyId=adminId;
+    const coName=data.company_name||'Your Company';
     document.getElementById('companyFoundBanner').style.display='flex';
-    document.getElementById('companyFoundName').textContent=data.company_name||code;
+    document.getElementById('companyFoundName').textContent=coName;
     document.getElementById('companyCodeInput').closest('div').style.display='none';
     populateEmpDeptsFromData(data.departments,'');
   }catch(e){errEl.textContent='Company not found. Check the code and try again.';errEl.style.display='block';}
