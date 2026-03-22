@@ -660,6 +660,10 @@ document.addEventListener('DOMContentLoaded',async()=>{
     myAttendance=attRes.data||[];
   }catch(e){myAttendance=[];}
 
+  // Show dashboard
+  document.getElementById('dashWrap').classList.add('show');
+  document.getElementById('profileOnly') && (document.getElementById('profileOnly').style.display='none');
+
   document.getElementById('navAv').textContent=initials(me.name);
   document.getElementById('navName').textContent=me.name;
   document.getElementById('navDept').textContent=me.department_name||'—';
