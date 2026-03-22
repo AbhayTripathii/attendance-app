@@ -947,11 +947,14 @@ function getGPS(){
 }
 function setGPS(lat,lng,acc){
   capturedLat=parseFloat(lat);capturedLng=parseFloat(lng);
-  document.getElementById('gpsC').textContent=lat+'° N, '+lng+'° E';
-  document.getElementById('gpsA').textContent='Accuracy: ±'+acc+'m';
-  document.getElementById('gpsDot').className='gps-dot live';
-  document.getElementById('btnGps').textContent='Refresh Location';
-  document.getElementById('btnGps').disabled=false;
+  const coordEl=document.getElementById('gpsCoords');
+  const addrEl=document.getElementById('gpsAddr');
+  const accEl=document.getElementById('gpsAcc');
+  const btnGps=document.getElementById('btnGps');
+  if(coordEl) coordEl.textContent=lat+'° N, '+lng+'° E';
+  if(addrEl) addrEl.textContent='Location captured ✓';
+  if(accEl){accEl.textContent='Accuracy: ±'+acc+'m';accEl.style.display='block';}
+  if(btnGps){btnGps.textContent='📍 Refresh Location';btnGps.disabled=false;}
   gpsDone=true;markCk('ck2');updateBtns();
   const mapEl=document.getElementById('gpsMap');
   if(mapEl)mapEl.src='https://maps.google.com/maps?q='+lat+','+lng+'&z=16&output=embed';
