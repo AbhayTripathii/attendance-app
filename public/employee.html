@@ -602,7 +602,7 @@
 const API='https://attendance-app-at.up.railway.app';
 
 async function apiFetch(path,options={}){
-  const token=sessionStorage.getItem('token');
+  const token=localStorage.getItem('at_token');
   const headers={'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{}),...(options.headers||{})};
   const res=await fetch(API+path,{...options,headers});
   const data=await res.json();
@@ -611,7 +611,8 @@ async function apiFetch(path,options={}){
 }
 
 const sess=JSON.parse(sessionStorage.getItem('at_session')||'null');
-if(!sess||sess.role!=='employee'){location.href='index.html';}
+const _tok=localStorage.getItem('at_token');
+if((!sess||sess.role!=='employee')&&!_tok){location.href='index.html';}
 
 let me=null;
 let calY=new Date().getFullYear(),calM=new Date().getMonth();
@@ -677,7 +678,7 @@ function tab(name,el){
   if(name==='history')renderHistory();
   if(name==='profile')renderProfile();
 }
-function logout(){sessionStorage.clear();location.href='index.html';}
+function logout(){sessionStorage.clear();localStorage.removeItem('at_token');location.href='index.html';}
 
 function today(){return new Date().toISOString().split('T')[0];}
 function p(n){return String(n).padStart(2,'0');}
