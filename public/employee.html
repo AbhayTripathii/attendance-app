@@ -996,11 +996,22 @@ async function markAtt(type){
       document.getElementById('btnIn').className='btn done-look';
       document.getElementById('btnIn').textContent='Checked In';
       document.getElementById('btnIn').disabled=true;
+      // Enable checkout immediately after checkin
       document.getElementById('btnOut').disabled=false;
       document.getElementById('btnOut').className='btn danger';
+      // Reset checklist so user can re-verify for checkout
+      snapDone=false; gpsDone=false; faceDone=false;
+      document.getElementById('ck1').classList.remove('done');document.getElementById('ck1').querySelector('.chk-mark').textContent='○';
+      document.getElementById('ck2').classList.remove('done');document.getElementById('ck2').querySelector('.chk-mark').textContent='○';
+      document.getElementById('ck3').classList.remove('done');document.getElementById('ck3').querySelector('.chk-mark').textContent='○';
+      document.getElementById('snapPrev').classList.remove('show');
+      document.getElementById('scoreLabel').textContent='Not scanned';
+      document.getElementById('scoreLabel').className='score-badge';
       setSbar('in',ts);
-      showAttAlert('Checked in at '+ts,'ok');
+      showAttAlert('Checked in at '+ts+'. Now capture face + GPS again to check out.','ok');
     }else{
+      // Re-fetch to get latest record including the just-completed check-in
+      try{const fresh=await apiFetch('/api/attendance?user_id='+me.id+'&limit=100');myAttendance=fresh.data||[];}catch(e){}
       const rec=myAttendance.find(a=>a.date===today());
       if(!rec||!rec.check_in_time){showAttAlert('Check in first.','err');return;}
       if(rec.check_out_time){showAttAlert('Already checked out.','err');return;}
