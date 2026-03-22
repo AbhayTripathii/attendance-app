@@ -865,9 +865,9 @@ async function snapAndVerify(){
     let dist=0;
     for(let i=0;i<128;i++) dist+=(stored[i]-live[i])*(stored[i]-live[i]);
     dist=Math.sqrt(dist);
-    const score=Math.round(Math.max(0,Math.min(100,(1-(dist/0.6))*100)));
+    const score=Math.round(Math.max(0,Math.min(100,(1-(dist/0.8))*100)));
     faceMatchScore=score;
-    const pass=dist<0.5;
+    const pass=dist<0.65;
 
     ring.className='vring '+(pass?'done':'fail');
     icon.textContent=pass?'✓':'✗';
@@ -875,7 +875,7 @@ async function snapAndVerify(){
     scoreEl.className='verify-score'+(pass?'':' fail');
     scoreEl.style.display='block';
     label.textContent=pass?'Identity verified!':'Face does not match';
-    sub.textContent=pass?'Distance: '+dist.toFixed(3)+' < 0.5':'Distance: '+dist.toFixed(3)+' >= 0.5';
+    sub.textContent=pass?'Match: '+score+'% >= 50% threshold':'Match: '+score+'% < 50% threshold';
 
     setTimeout(function(){
       ov.classList.remove('show');stopCam();
