@@ -10,6 +10,14 @@ const db = require('../config/database');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'attendance_secret_key_2024';
 
+// ─── Run migrations on startup ────────────────────────────────
+(async () => {
+  try {
+    await db.execute(`ALTER TABLE users ADD COLUMN IF NOT EXISTS company_name VARCHAR(200) DEFAULT NULL`);
+    console.log('✅ DB migration: company_name column ready');
+  } catch(e) { console.warn('Migration note:', e.message); }
+})();
+
 // ─── Middleware: verify JWT ───────────────────────────────────
 const verifyToken = (req, res, next) => {
   const token = (req.headers['authorization'] || '').split(' ')[1];
@@ -26,7 +34,18 @@ const verifyToken = (req, res, next) => {
 router.get('/departments', async (req, res) => {
   try {
     const [rows] = await db.execute('SELECT id, name, description FROM departments ORDER BY name');
-    res.json({ departments: rows });
+    // Also return company info if token provided
+    let company_name = null;
+    const token = (req.headers['authorization']||'').split(' ')[1];
+    if (token) {
+      try {
+        const jwt = require('jsonwebtoken');
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'attendance_secret_key_2024');
+        const [uRows] = await db.execute('SELECT company_name FROM users WHERE id = ?', [decoded.id]);
+        if (uRows.length > 0) company_name = uRows[0].company_name;
+      } catch(e) {}
+    }
+    res.json({ departments: rows, company_name });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch departments.' });
   }
@@ -95,8 +114,8 @@ router.post('/register', async (req, res) => {
     let deptId = department_id || null;
 
     const [result] = await db.execute(
-      'INSERT INTO users (name, email, password, role, department_id) VALUES (?, ?, ?, ?, ?)',
-      [name.trim(), email.trim().toLowerCase(), hashedPassword, userRole, deptId]
+      'INSERT INTO users (name, email, password, role, department_id, company_name) VALUES (?, ?, ?, ?, ?, ?)',
+      [name.trim(), email.trim().toLowerCase(), hashedPassword, userRole, deptId, company_name||null]
     );
 
     // If employee with face data, store face descriptor in face_data table
@@ -157,7 +176,8 @@ router.post('/change-password', verifyToken, async (req, res) => {
 router.get('/me', verifyToken, async (req, res) => {
   try {
     const [rows] = await db.execute(
-      `SELECT u.id, u.name, u.email, u.role, u.department_id, d.name AS department_name
+      `SELECT u.id, u.name, u.email, u.role, u.department_id, u.company_name,
+              d.name AS department_name
        FROM users u LEFT JOIN departments d ON u.department_id = d.id
        WHERE u.id = ? LIMIT 1`,
       [req.user.id]
