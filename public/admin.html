@@ -554,7 +554,7 @@ async function loadAllData(){
   }catch(e){ console.warn('Data load error:',e.message); }
 }
 
-function logout(){ sessionStorage.clear(); location.href='index.html'; }
+function logout(){ sessionStorage.clear(); localStorage.removeItem('at_token'); location.href='index.html'; }
 function openWizard(){
   document.getElementById('wizardOverlay').style.display='flex';
   wizStep=1; updateWizUI();
