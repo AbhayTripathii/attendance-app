@@ -867,7 +867,7 @@ async function snapAndVerify(){
     dist=Math.sqrt(dist);
     const score=Math.round(Math.max(0,Math.min(100,(1-(dist/0.8))*100)));
     faceMatchScore=score;
-    const pass=dist<0.65;
+    const pass=dist<0.75;
 
     ring.className='vring '+(pass?'done':'fail');
     icon.textContent=pass?'✓':'✗';
