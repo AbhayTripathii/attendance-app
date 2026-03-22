@@ -599,9 +599,6 @@
 <!-- face-api.js — real neural network face recognition -->
 <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 <script>
-<!-- face-api.js — real neural network face recognition -->
-<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
-<script>
 // ═══════════════════════════════════════════
 //  API CONFIG
 // ═══════════════════════════════════════════
@@ -658,7 +655,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
   }catch(e){
     console.error('Failed to load profile:',e.message);
     // Don't redirect immediately — show error so we can debug
-    document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;flex-direction:column;gap:16px;background:#0f0f0f;color:#f0f0ee"><div style="font-size:18px;font-weight:700;color:#ff4d4d">Session Error</div><div style="font-size:13px;color:#888">'+e.message+'</div><button onclick="sessionStorage.clear();location.href='index.html'" style="padding:10px 20px;background:#3ddc84;color:#000;border:none;border-radius:6px;font-weight:700;cursor:pointer;font-size:13px">Back to Login</button></div>';
+    document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;flex-direction:column;gap:16px;background:#0f0f0f;color:#f0f0ee"><div style="font-size:18px;font-weight:700;color:#ff4d4d">Session Error</div><div style="font-size:13px;color:#888">'+e.message+'</div><button onclick="sessionStorage.clear();location.href=`index.html`" style="padding:10px 20px;background:#3ddc84;color:#000;border:none;border-radius:6px;font-weight:700;cursor:pointer;font-size:13px">Back to Login</button></div>';
     return;
   }
 
