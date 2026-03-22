@@ -596,15 +596,12 @@
   </div>
 </div>
 
-<!-- face-api.js — real neural network face recognition -->
+<!-- face-api.js -->
 <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 <script>
-// ═══════════════════════════════════════════
-//  API CONFIG
-// ═══════════════════════════════════════════
-const API = 'https://attendance-app-at.up.railway.app';
+const API='https://attendance-app-at.up.railway.app';
 
-async function apiFetch(path, options={}){
+async function apiFetch(path,options={}){
   const token=sessionStorage.getItem('token');
   const headers={'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{}),...(options.headers||{})};
   const res=await fetch(API+path,{...options,headers});
@@ -613,18 +610,16 @@ async function apiFetch(path, options={}){
   return data;
 }
 
-// ── Auth ──
 const sess=JSON.parse(sessionStorage.getItem('at_session')||'null');
 if(!sess||sess.role!=='employee'){location.href='index.html';}
 
 let me=null;
-let calY=new Date().getFullYear(), calM=new Date().getMonth();
+let calY=new Date().getFullYear(),calM=new Date().getMonth();
 let snapDone=false,gpsDone=false,faceDone=false,wt='office',stream=null;
-let capturedLat=null,capturedLng=null,capturedAcc=null;
+let capturedLat=null,capturedLng=null;
 let faceMatchScore=0;
 let myAttendance=[];
 
-// ── face-api.js models ──
 const MODEL_URL='https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model';
 let faceApiReady=false;
 async function loadFaceModels(){
@@ -635,11 +630,10 @@ async function loadFaceModels(){
       faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
     ]);
     faceApiReady=true;
-  }catch(e){ faceApiReady=false; }
+  }catch(e){faceApiReady=false;}
 }
 loadFaceModels();
 
-// ── Clock ──
 function tick(){const el=document.getElementById('clk');if(el)el.textContent=new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
 setInterval(tick,1000);tick();
 
@@ -647,17 +641,16 @@ document.addEventListener('DOMContentLoaded',async()=>{
   try{
     const res=await apiFetch('/api/auth/me');
     me=res.user;
-    // Load attendance
-    try{
-      const attRes=await apiFetch('/api/attendance?user_id='+me.id+'&limit=100');
-      myAttendance=attRes.data||[];
-    }catch(e){ myAttendance=[]; }
   }catch(e){
-    console.error('Failed to load profile:',e.message);
-    // Don't redirect immediately — show error so we can debug
-    document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;flex-direction:column;gap:16px;background:#0f0f0f;color:#f0f0ee"><div style="font-size:18px;font-weight:700;color:#ff4d4d">Session Error</div><div style="font-size:13px;color:#888">'+e.message+'</div><button onclick="sessionStorage.clear();location.href=`index.html`" style="padding:10px 20px;background:#3ddc84;color:#000;border:none;border-radius:6px;font-weight:700;cursor:pointer;font-size:13px">Back to Login</button></div>';
+    sessionStorage.clear();
+    location.href='index.html';
     return;
   }
+
+  try{
+    const attRes=await apiFetch('/api/attendance?user_id='+me.id+'&limit=100');
+    myAttendance=attRes.data||[];
+  }catch(e){myAttendance=[];}
 
   document.getElementById('navAv').textContent=initials(me.name);
   document.getElementById('navName').textContent=me.name;
@@ -672,8 +665,8 @@ document.addEventListener('DOMContentLoaded',async()=>{
   loadTodayTimes();
 
   const todayRec=myAttendance.find(a=>a.date===today());
-  if(todayRec?.check_in_time&&todayRec?.check_out_time) setSbar('done',fmtTime(todayRec.check_in_time),fmtTime(todayRec.check_out_time));
-  else if(todayRec?.check_in_time) setSbar('in',fmtTime(todayRec.check_in_time));
+  if(todayRec&&todayRec.check_in_time&&todayRec.check_out_time) setSbar('done',fmtTime(todayRec.check_in_time),fmtTime(todayRec.check_out_time));
+  else if(todayRec&&todayRec.check_in_time) setSbar('in',fmtTime(todayRec.check_in_time));
 });
 
 function tab(name,el){
@@ -681,12 +674,11 @@ function tab(name,el){
   document.getElementById('tab-'+name).classList.add('on');
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   if(el)el.classList.add('active');
-  if(name==='history') renderHistory();
-  if(name==='profile') renderProfile();
+  if(name==='history')renderHistory();
+  if(name==='profile')renderProfile();
 }
 function logout(){sessionStorage.clear();location.href='index.html';}
 
-// ── Helpers ──
 function today(){return new Date().toISOString().split('T')[0];}
 function p(n){return String(n).padStart(2,'0');}
 function initials(n){return n?n.split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase():'?';}
@@ -699,9 +691,8 @@ function calcHours(inDt,outDt){
   return Math.floor(diff/60)+'h '+diff%60+'m';
 }
 
-// ── HOME ──
 function renderHome(){
-  const m=new Date().getMonth()+1, y=new Date().getFullYear();
+  const m=new Date().getMonth()+1,y=new Date().getFullYear();
   const mA=myAttendance.filter(a=>{const dt=new Date(a.date);return dt.getMonth()+1===m&&dt.getFullYear()===y;});
   const pr=mA.filter(a=>a.status==='present').length;
   const la=mA.filter(a=>a.status==='late').length;
@@ -711,7 +702,7 @@ function renderHome(){
   document.getElementById('sl').textContent=la;
   document.getElementById('sa').textContent=ab;
   document.getElementById('sr').textContent=rate+'%';
-  buildCal(); buildTodayBox();
+  buildCal();buildTodayBox();
 }
 
 function buildCal(){
@@ -721,23 +712,23 @@ function buildCal(){
   const firstDay=new Date(calY,calM,1).getDay();
   const dim=new Date(calY,calM+1,0).getDate();
   const dn=['Su','Mo','Tu','We','Th','Fr','Sa'];
-  let html=dn.map(d=>`<div class="cal-dn">${d}</div>`).join('');
-  for(let i=0;i<firstDay;i++) html+=`<div class="cal-cell empty"></div>`;
+  let html=dn.map(d=>'<div class="cal-dn">'+d+'</div>').join('');
+  for(let i=0;i<firstDay;i++) html+='<div class="cal-cell empty"></div>';
   for(let d=1;d<=dim;d++){
     const ds=calY+'-'+p(calM+1)+'-'+p(d);
     const dow=new Date(calY,calM,d).getDay();
     const isFuture=ds>todayStr,isToday=ds===todayStr,isWeekend=dow===0||dow===6;
     let cls='';
-    if(isFuture) cls='future';
-    else if(isWeekend) cls='weekend';
+    if(isFuture)cls='future';
+    else if(isWeekend)cls='weekend';
     else{
       const rec=myAttendance.find(a=>a.date===ds);
-      if(rec?.status==='present'||rec?.status==='wfh') cls='present';
-      else if(rec?.status==='late') cls='late';
-      else if(rec?.status==='absent') cls='absent';
+      if(rec&&(rec.status==='present'||rec.status==='wfh'))cls='present';
+      else if(rec&&rec.status==='late')cls='late';
+      else if(rec&&rec.status==='absent')cls='absent';
       else cls='no-data';
     }
-    html+=`<div class="cal-cell ${cls}${isToday?' today':''}">${d}</div>`;
+    html+='<div class="cal-cell '+cls+(isToday?' today':'')+'">'+d+'</div>';
   }
   document.getElementById('calGrid').innerHTML=html;
 }
@@ -747,26 +738,42 @@ function nextM(){if(calM===11){calM=0;calY++;}else calM++;buildCal();}
 function buildTodayBox(){
   const rec=myAttendance.find(a=>a.date===today());
   if(!rec){
-    document.getElementById('todayBox').innerHTML=`<p style="font-size:12px;color:var(--muted);margin-bottom:12px">No attendance recorded today.</p><button class="btn primary" style="width:100%" onclick="tab('mark',document.querySelectorAll('.nav-tab')[1])">Go to Mark Attendance</button>`;
+    document.getElementById('todayBox').innerHTML='<p style="font-size:12px;color:var(--muted);margin-bottom:12px">No attendance recorded today.</p><button class="btn primary" style="width:100%" onclick="tab(\'mark\',null)">Go to Mark Attendance</button>';
     return;
   }
   const hrs=calcHours(rec.check_in_time,rec.check_out_time);
-  document.getElementById('todayBox').innerHTML=`
-    <div style="display:flex;flex-direction:column;gap:9px">
-      ${rowBox('Check In',fmtTime(rec.check_in_time),!!rec.check_in_time)}
-      ${rowBox('Check Out',rec.check_out_time?fmtTime(rec.check_out_time):'Pending',!!rec.check_out_time)}
-      ${rowBox('Hours',hrs,false)}
-      <div style="text-align:center"><span class="badge ${rec.status}">${cap(rec.status)}</span></div>
-    </div>`;
+  document.getElementById('todayBox').innerHTML=
+    '<div style="display:flex;flex-direction:column;gap:9px">'+
+    rowBox('Check In',fmtTime(rec.check_in_time),!!rec.check_in_time)+
+    rowBox('Check Out',rec.check_out_time?fmtTime(rec.check_out_time):'Pending',!!rec.check_out_time)+
+    rowBox('Hours',hrs,false)+
+    '<div style="text-align:center"><span class="badge '+rec.status+'">'+cap(rec.status)+'</span></div>'+
+    '</div>';
 }
-function rowBox(l,v,hi){return`<div style="display:flex;justify-content:space-between;padding:9px;background:var(--off);border-radius:4px;border:1px solid var(--border)"><span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">${l}</span><span style="font-size:14px;font-weight:700;color:${hi?'var(--accent)':'var(--light)'}">${v}</span></div>`;}
+function rowBox(l,v,hi){
+  return '<div style="display:flex;justify-content:space-between;padding:9px;background:var(--off);border-radius:4px;border:1px solid var(--border)">'+
+    '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">'+l+'</span>'+
+    '<span style="font-size:14px;font-weight:700;color:'+(hi?'var(--accent)':'var(--light)')+'">'+v+'</span></div>';
+}
 
-// ══ MARK ATTENDANCE ══
 function loadTodayTimes(){
   const rec=myAttendance.find(a=>a.date===today());
-  if(rec?.check_in_time){setTB('in',fmtTime(rec.check_in_time));document.getElementById('btnIn').className='btn done-look';document.getElementById('btnIn').textContent='Checked In ✓';document.getElementById('btnIn').disabled=true;}
-  if(rec?.check_out_time){setTB('out',fmtTime(rec.check_out_time));document.getElementById('btnOut').className='btn done-look';document.getElementById('btnOut').textContent='Checked Out ✓';document.getElementById('btnOut').disabled=true;}
-  if(rec?.check_in_time&&!rec?.check_out_time){document.getElementById('btnOut').disabled=false;document.getElementById('btnOut').className='btn danger';}
+  if(rec&&rec.check_in_time){
+    setTB('in',fmtTime(rec.check_in_time));
+    document.getElementById('btnIn').className='btn done-look';
+    document.getElementById('btnIn').textContent='Checked In';
+    document.getElementById('btnIn').disabled=true;
+  }
+  if(rec&&rec.check_out_time){
+    setTB('out',fmtTime(rec.check_out_time));
+    document.getElementById('btnOut').className='btn done-look';
+    document.getElementById('btnOut').textContent='Checked Out';
+    document.getElementById('btnOut').disabled=true;
+  }
+  if(rec&&rec.check_in_time&&!rec.check_out_time){
+    document.getElementById('btnOut').disabled=false;
+    document.getElementById('btnOut').className='btn danger';
+  }
 }
 function setTB(type,time){
   const box=document.getElementById(type==='in'?'inBox':'outBox');
@@ -774,41 +781,41 @@ function setTB(type,time){
   box.classList.add('filled');val.className='tb-val set';val.textContent=time;
 }
 
-// ══ CAMERA ══
 async function startCam(){
   const btn=document.getElementById('btnCam');
-  btn.textContent='Starting…'; btn.disabled=true;
+  btn.textContent='Starting...';btn.disabled=true;
   try{
     stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
     document.getElementById('vid').srcObject=stream;
     document.getElementById('camOv').style.display='none';
     document.getElementById('camWrap').classList.add('scanning');
     document.getElementById('faceOval').className='face-oval good';
-    document.getElementById('camBarL').innerHTML='Camera <span>active</span> — align face with oval';
-    btn.textContent='Stop'; btn.disabled=false; btn.onclick=stopCam;
+    document.getElementById('camBarL').textContent='Camera active';
+    btn.textContent='Stop';btn.disabled=false;btn.onclick=stopCam;
     document.getElementById('btnSnap').disabled=false;
   }catch(e){
-    document.getElementById('camOv').innerHTML='<div class="ico">🤳</div><p>Camera unavailable — please allow camera access</p>';
-    btn.textContent='Start Camera'; btn.disabled=false;
+    document.getElementById('camOv').innerHTML='<div class="ico">No Camera</div><p>Allow camera access</p>';
+    btn.textContent='Start Camera';btn.disabled=false;
   }
 }
 function stopCam(){
-  if(stream)stream.getTracks().forEach(t=>t.stop()); stream=null;
-  document.getElementById('camOv').innerHTML='<div class="ico">📷</div><p>Click <a onclick="startCam()" style="cursor:pointer">Start Camera</a><br>to begin verification</p>';
+  if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;
   document.getElementById('camOv').style.display='flex';
   document.getElementById('camWrap').classList.remove('scanning');
   document.getElementById('faceOval').className='face-oval';
   document.getElementById('camBarL').textContent='Camera inactive';
-  document.getElementById('btnCam').textContent='Start Camera'; document.getElementById('btnCam').onclick=startCam; document.getElementById('btnCam').disabled=false;
+  document.getElementById('btnCam').textContent='Start Camera';
+  document.getElementById('btnCam').onclick=startCam;
+  document.getElementById('btnCam').disabled=false;
   document.getElementById('btnSnap').disabled=true;
 }
 
-// ══ SNAP + REAL FACE VERIFY (face-api.js) ══
 async function snapAndVerify(){
   const vid=document.getElementById('vid');
   const snapBtn=document.getElementById('btnSnap');
   snapBtn.disabled=true;
   if(!vid.srcObject||vid.readyState<2){snapBtn.disabled=false;showAttAlert('Please start your camera first.','err');return;}
+
   const cvs=document.getElementById('cvs');
   const ctx=cvs.getContext('2d');
   cvs.width=vid.videoWidth||640;cvs.height=vid.videoHeight||480;
@@ -823,33 +830,28 @@ async function snapAndVerify(){
   const scoreEl=document.getElementById('verifyScore');
   ov.classList.add('show');
   ring.className='vring';icon.textContent='';scoreEl.style.display='none';
-  label.textContent='Detecting face…';sub.textContent='';
+  label.textContent='Detecting face...';sub.textContent='';
 
   try{
     if(!faceApiReady) throw new Error('MODELS_NOT_READY');
 
-    label.textContent='Detecting face in camera…';
-    sub.textContent='Running TinyFaceDetector';
+    label.textContent='Detecting face in camera...';
     const liveDetection=await faceapi
       .detectSingleFace(vid,new faceapi.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:0.5}))
       .withFaceLandmarks().withFaceDescriptor();
     if(!liveDetection) throw new Error('NO_FACE_LIVE');
 
-    label.textContent='Loading enrolled biometrics…';
-    sub.textContent='Retrieving your face profile';
+    label.textContent='Comparing biometrics...';
     await new Promise(r=>setTimeout(r,400));
 
-    const storedDescriptor=me?.face_descriptor;
+    const storedDescriptor=me&&me.face_descriptor;
     if(!storedDescriptor||storedDescriptor.length===0) throw new Error('NO_STORED_DESCRIPTOR');
 
-    label.textContent='Comparing face biometrics…';
-    sub.textContent='Computing similarity distance';
-    await new Promise(r=>setTimeout(r,500));
-
+    await new Promise(r=>setTimeout(r,400));
     const stored=new Float32Array(storedDescriptor);
     const live=liveDetection.descriptor;
     let dist=0;
-    for(let i=0;i<128;i++) dist+=(stored[i]-live[i])**2;
+    for(let i=0;i<128;i++) dist+=(stored[i]-live[i])*(stored[i]-live[i]);
     dist=Math.sqrt(dist);
     const score=Math.round(Math.max(0,Math.min(100,(1-(dist/0.6))*100)));
     faceMatchScore=score;
@@ -861,9 +863,9 @@ async function snapAndVerify(){
     scoreEl.className='verify-score'+(pass?'':' fail');
     scoreEl.style.display='block';
     label.textContent=pass?'Identity verified!':'Face does not match';
-    sub.textContent=pass?'Distance: '+dist.toFixed(3)+' < 0.5':'Distance: '+dist.toFixed(3)+' ≥ 0.5';
+    sub.textContent=pass?'Distance: '+dist.toFixed(3)+' < 0.5':'Distance: '+dist.toFixed(3)+' >= 0.5';
 
-    setTimeout(()=>{
+    setTimeout(function(){
       ov.classList.remove('show');stopCam();
       if(pass){
         document.getElementById('snapThumb').src=snapBase64;
@@ -874,102 +876,98 @@ async function snapAndVerify(){
         snapDone=true;faceDone=true;
         markCk('ck1');markCk('ck3');updateBtns();
       }else{
-        document.getElementById('scoreLabel').textContent='Failed – retry';
+        document.getElementById('scoreLabel').textContent='Failed - retry';
         document.getElementById('scoreLabel').className='score-badge';
         snapBtn.disabled=false;
-        showAttAlert('Face does not match ('+score+'%). Look directly at camera in good lighting.','err');
+        showAttAlert('Face does not match ('+score+'%). Look directly at camera.','err');
       }
     },1800);
-
   }catch(e){
     ov.classList.remove('show');snapBtn.disabled=false;
-    if(e.message==='NO_FACE_LIVE') showAttAlert('❌ No face detected. Look directly at the camera.','err');
-    else if(e.message==='NO_STORED_DESCRIPTOR') showAttAlert('⚠ No biometric profile. Please re-register.','err');
-    else if(e.message==='MODELS_NOT_READY') showAttAlert('⏳ AI models loading. Wait and try again.','err');
-    else showAttAlert('Verification error. Try again.','err');
+    if(e.message==='NO_FACE_LIVE') showAttAlert('No face detected. Look directly at the camera.','err');
+    else if(e.message==='NO_STORED_DESCRIPTOR') showAttAlert('No biometric profile found. Please re-register.','err');
+    else if(e.message==='MODELS_NOT_READY') showAttAlert('AI models loading. Wait and try again.','err');
+    else showAttAlert('Verification error: '+e.message,'err');
   }
 }
 
-// ══ GPS ══
 let gpsWatchId=null;
 function getGPS(){
   const btn=document.getElementById('btnGps');
-  btn.textContent='Locating…';btn.disabled=true;
-  if(!navigator.geolocation){setGPS('28.613900','77.209000',500,'Default location');return;}
-  if(gpsWatchId) navigator.geolocation.clearWatch(gpsWatchId);
-  let bestAcc=Infinity,timeout=null;
+  btn.textContent='Locating...';btn.disabled=true;
+  if(!navigator.geolocation){setGPS('28.613900','77.209000',500);return;}
+  if(gpsWatchId)navigator.geolocation.clearWatch(gpsWatchId);
+  let bestAcc=Infinity;
   gpsWatchId=navigator.geolocation.watchPosition(
-    pos=>{
+    function(pos){
       if(pos.coords.accuracy<bestAcc){
         bestAcc=pos.coords.accuracy;
-        setGPS(pos.coords.latitude.toFixed(6),pos.coords.longitude.toFixed(6),Math.round(pos.coords.accuracy),'Live GPS');
-        capturedLat=pos.coords.latitude;capturedLng=pos.coords.longitude;capturedAcc=pos.coords.accuracy;
-        if(pos.coords.accuracy<=20){navigator.geolocation.clearWatch(gpsWatchId);if(timeout)clearTimeout(timeout);}
+        setGPS(pos.coords.latitude.toFixed(6),pos.coords.longitude.toFixed(6),Math.round(pos.coords.accuracy));
+        capturedLat=pos.coords.latitude;capturedLng=pos.coords.longitude;
+        if(pos.coords.accuracy<=20)navigator.geolocation.clearWatch(gpsWatchId);
       }
     },
-    ()=>setGPS('28.613900','77.209000',500,'Default (GPS denied)'),
+    function(){setGPS('28.613900','77.209000',500);},
     {enableHighAccuracy:true,timeout:15000,maximumAge:0}
   );
-  timeout=setTimeout(()=>navigator.geolocation.clearWatch(gpsWatchId),20000);
+  setTimeout(function(){navigator.geolocation.clearWatch(gpsWatchId);},20000);
 }
-function setGPS(lat,lng,acc,label){
+function setGPS(lat,lng,acc){
   capturedLat=parseFloat(lat);capturedLng=parseFloat(lng);
   document.getElementById('gpsC').textContent=lat+'° N, '+lng+'° E';
-  document.getElementById('gpsA').textContent=(label||'GPS')+' · ±'+acc+'m';
+  document.getElementById('gpsA').textContent='Accuracy: ±'+acc+'m';
   document.getElementById('gpsDot').className='gps-dot live';
-  document.getElementById('btnGps').textContent='Refresh Location';document.getElementById('btnGps').disabled=false;
+  document.getElementById('btnGps').textContent='Refresh Location';
+  document.getElementById('btnGps').disabled=false;
   gpsDone=true;markCk('ck2');updateBtns();
-  // Update map iframe
   const mapEl=document.getElementById('gpsMap');
-  if(mapEl) mapEl.src=`https://maps.google.com/maps?q=${lat},${lng}&z=16&output=embed`;
+  if(mapEl)mapEl.src='https://maps.google.com/maps?q='+lat+','+lng+'&z=16&output=embed';
 }
 
-function markCk(id){const el=document.getElementById(id);el.classList.add('done');el.querySelector('.chk-mark').textContent='✓';}
+function markCk(id){
+  const el=document.getElementById(id);
+  el.classList.add('done');
+  el.querySelector('.chk-mark').textContent='✓';
+}
 function updateBtns(){
   const ready=snapDone&&gpsDone;
   const rec=myAttendance.find(a=>a.date===today());
-  const inBtn=document.getElementById('btnIn'),outBtn=document.getElementById('btnOut');
-  if(!rec?.check_in_time){inBtn.disabled=!ready;if(ready)inBtn.className='btn primary';}
-  if(rec?.check_in_time&&!rec?.check_out_time){outBtn.disabled=!ready;if(ready)outBtn.className='btn danger';}
+  const inBtn=document.getElementById('btnIn');
+  const outBtn=document.getElementById('btnOut');
+  if(!rec||!rec.check_in_time){inBtn.disabled=!ready;if(ready)inBtn.className='btn primary';}
+  if(rec&&rec.check_in_time&&!rec.check_out_time){outBtn.disabled=!ready;if(ready)outBtn.className='btn danger';}
 }
-function selWT(t){wt=t;['office','wfh','field'].forEach(x=>{document.getElementById('wt-'+x).className='wt'+(x===t?' sel':'');});}
+function selWT(t){
+  wt=t;
+  ['office','wfh','field'].forEach(function(x){document.getElementById('wt-'+x).className='wt'+(x===t?' sel':'');});
+}
 
 async function markAtt(type){
   if(!snapDone||!gpsDone){showAttAlert('Complete all steps first.','err');return;}
   const now=new Date();
   const ts=p(now.getHours())+':'+p(now.getMinutes());
-
   try{
     if(type==='in'){
       const rec=myAttendance.find(a=>a.date===today());
-      if(rec?.check_in_time){showAttAlert('Already checked in.','err');return;}
-      // Call backend checkin API
+      if(rec&&rec.check_in_time){showAttAlert('Already checked in.','err');return;}
       const res=await apiFetch('/api/attendance/checkin',{
         method:'POST',
-        body:JSON.stringify({
-          employee_id:me.id,
-          latitude:capturedLat,
-          longitude:capturedLng,
-          face_match_score:faceMatchScore,
-          work_type:wt,
-          ip_address:''
-        })
+        body:JSON.stringify({employee_id:me.id,latitude:capturedLat,longitude:capturedLng,face_match_score:faceMatchScore,work_type:wt,ip_address:''})
       });
-      // Refresh attendance data
       const attRes=await apiFetch('/api/attendance?user_id='+me.id+'&limit=100');
       myAttendance=attRes.data||[];
       setTB('in',ts);
       document.getElementById('btnIn').className='btn done-look';
-      document.getElementById('btnIn').textContent='Checked In ✓';
+      document.getElementById('btnIn').textContent='Checked In';
       document.getElementById('btnIn').disabled=true;
       document.getElementById('btnOut').disabled=false;
       document.getElementById('btnOut').className='btn danger';
       setSbar('in',ts);
-      showAttAlert('Checked in at '+ts+' — '+(res.status==='late'?'Late':'On time'),'ok');
+      showAttAlert('Checked in at '+ts,'ok');
     }else{
       const rec=myAttendance.find(a=>a.date===today());
-      if(!rec?.check_in_time){showAttAlert('Check in first.','err');return;}
-      if(rec?.check_out_time){showAttAlert('Already checked out.','err');return;}
+      if(!rec||!rec.check_in_time){showAttAlert('Check in first.','err');return;}
+      if(rec.check_out_time){showAttAlert('Already checked out.','err');return;}
       await apiFetch('/api/attendance/checkout/'+rec.id,{
         method:'PUT',
         body:JSON.stringify({latitude:capturedLat,longitude:capturedLng})
@@ -978,10 +976,10 @@ async function markAtt(type){
       myAttendance=attRes.data||[];
       setTB('out',ts);
       document.getElementById('btnOut').className='btn done-look';
-      document.getElementById('btnOut').textContent='Checked Out ✓';
+      document.getElementById('btnOut').textContent='Checked Out';
       document.getElementById('btnOut').disabled=true;
       setSbar('done',fmtTime(rec.check_in_time),ts);
-      showAttAlert('Checked out at '+ts+'. Great work!','ok');
+      showAttAlert('Checked out at '+ts,'ok');
     }
     buildTodayBox();buildCal();
   }catch(e){
@@ -990,64 +988,71 @@ async function markAtt(type){
 }
 
 function setSbar(state,inT,outT){
-  const bar=document.getElementById('sbar'),dot=document.getElementById('sbDot'),st=document.getElementById('sbSt'),sub=document.getElementById('sbSub');
+  const bar=document.getElementById('sbar');
+  const dot=document.getElementById('sbDot');
+  const st=document.getElementById('sbSt');
+  const sub=document.getElementById('sbSub');
   if(state==='in'){bar.className='sbar in';dot.className='sb-dot g';st.textContent='Checked In';sub.textContent='Since '+inT;}
-  else if(state==='done'){bar.className='sbar done';dot.className='sb-dot gr';st.textContent='Work Complete';sub.textContent=inT+' – '+outT;}
+  else if(state==='done'){bar.className='sbar done';dot.className='sb-dot gr';st.textContent='Work Complete';sub.textContent=inT+' - '+outT;}
 }
-function showAttAlert(msg,type){const el=document.getElementById('markAlert');el.className='alert '+type;el.textContent=msg;el.style.display='block';setTimeout(()=>el.style.display='none',5000);}
+function showAttAlert(msg,type){
+  const el=document.getElementById('markAlert');
+  el.className='alert '+type;el.textContent=msg;el.style.display='block';
+  setTimeout(function(){el.style.display='none';},5000);
+}
 
-// ══ HISTORY ══
 function populateHistSel(){
   const sel=document.getElementById('histSel');
   const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
   const now=new Date();let html='';
-  for(let i=0;i<6;i++){const dt=new Date(now.getFullYear(),now.getMonth()-i,1);html+=`<option value="${dt.getFullYear()+'-'+p(dt.getMonth()+1)}"${i===0?' selected':''}>${months[dt.getMonth()]} ${dt.getFullYear()}</option>`;}
+  for(let i=0;i<6;i++){
+    const dt=new Date(now.getFullYear(),now.getMonth()-i,1);
+    html+='<option value="'+dt.getFullYear()+'-'+p(dt.getMonth()+1)+'"'+(i===0?' selected':'')+'>'+months[dt.getMonth()]+' '+dt.getFullYear()+'</option>';
+  }
   sel.innerHTML=html;
 }
 function renderHistory(){
-  const mStr=document.getElementById('histSel')?.value||today().slice(0,7);
-  const att=myAttendance.filter(a=>a.date&&a.date.startsWith(mStr)).sort((a,b)=>b.date.localeCompare(a.date));
+  const mStr=document.getElementById('histSel')?document.getElementById('histSel').value:today().slice(0,7);
+  const att=myAttendance.filter(a=>a.date&&a.date.startsWith(mStr)).sort(function(a,b){return b.date.localeCompare(a.date);});
   if(att.length===0){document.getElementById('histWrap').innerHTML='<div style="text-align:center;padding:28px;font-size:12px;color:var(--muted)">No records for this month.</div>';return;}
-  document.getElementById('histWrap').innerHTML=`<div class="tw"><table>
-    <thead><tr><th>Date</th><th>Day</th><th>In</th><th>Out</th><th>Hours</th><th>Status</th></tr></thead>
-    <tbody>${att.map(a=>{
-      const dw=new Date(a.date+'T00:00:00');
-      const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-      return `<tr>
-        <td style="font-size:11px">${a.date}</td>
-        <td style="color:var(--muted)">${days[dw.getDay()]}</td>
-        <td style="font-weight:700;color:${a.check_in_time?'var(--accent)':'var(--muted)'}">${fmtTime(a.check_in_time)}</td>
-        <td style="color:var(--muted)">${fmtTime(a.check_out_time)}</td>
-        <td style="font-size:11px">${calcHours(a.check_in_time,a.check_out_time)}</td>
-        <td><span class="badge ${a.status}">${cap(a.status)}</span></td>
-      </tr>`;
-    }).join('')}</tbody></table></div>`;
+  let rows='';
+  att.forEach(function(a){
+    const dw=new Date(a.date+'T00:00:00');
+    const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    rows+='<tr>'+
+      '<td style="font-size:11px">'+a.date+'</td>'+
+      '<td style="color:var(--muted)">'+days[dw.getDay()]+'</td>'+
+      '<td style="font-weight:700;color:'+(a.check_in_time?'var(--accent)':'var(--muted)')+'">'+fmtTime(a.check_in_time)+'</td>'+
+      '<td style="color:var(--muted)">'+fmtTime(a.check_out_time)+'</td>'+
+      '<td style="font-size:11px">'+calcHours(a.check_in_time,a.check_out_time)+'</td>'+
+      '<td><span class="badge '+a.status+'">'+cap(a.status)+'</span></td>'+
+      '</tr>';
+  });
+  document.getElementById('histWrap').innerHTML='<div class="tw"><table><thead><tr><th>Date</th><th>Day</th><th>In</th><th>Out</th><th>Hours</th><th>Status</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 
-// ══ PROFILE ══
 function renderProfile(){
   if(!me)return;
-  const inits=initials(me.name);
-  document.getElementById('profAvB').textContent=inits;
+  document.getElementById('profAvB').textContent=initials(me.name);
   document.getElementById('profNm').textContent=me.name;
   document.getElementById('profPs').textContent=me.position||'Employee';
   document.getElementById('profId2').textContent='ID: '+me.id;
-  document.getElementById('infoGrid').innerHTML=`
-    <div class="ii"><div class="ii-l">Full Name</div><div class="ii-v">${me.name}</div></div>
-    <div class="ii"><div class="ii-l">Employee ID</div><div class="ii-v" style="font-size:11px">${me.id}</div></div>
-    <div class="ii"><div class="ii-l">Department</div><div class="ii-v">${me.department_name||'—'}</div></div>
-    <div class="ii"><div class="ii-l">Email</div><div class="ii-v" style="font-size:11px">${me.email}</div></div>`;
+  document.getElementById('infoGrid').innerHTML=
+    '<div class="ii"><div class="ii-l">Full Name</div><div class="ii-v">'+me.name+'</div></div>'+
+    '<div class="ii"><div class="ii-l">Employee ID</div><div class="ii-v" style="font-size:11px">'+me.id+'</div></div>'+
+    '<div class="ii"><div class="ii-l">Department</div><div class="ii-v">'+(me.department_name||'—')+'</div></div>'+
+    '<div class="ii"><div class="ii-l">Email</div><div class="ii-v" style="font-size:11px">'+me.email+'</div></div>';
   const m=new Date().getMonth()+1,y=new Date().getFullYear();
-  const mA=myAttendance.filter(a=>{const dt=new Date(a.date);return dt.getMonth()+1===m&&dt.getFullYear()===y;});
-  const pr=mA.filter(a=>a.status==='present').length;
-  const la=mA.filter(a=>a.status==='late').length;
-  const ab=mA.filter(a=>a.status==='absent').length;
+  const mA=myAttendance.filter(function(a){const dt=new Date(a.date);return dt.getMonth()+1===m&&dt.getFullYear()===y;});
+  const pr=mA.filter(function(a){return a.status==='present';}).length;
+  const la=mA.filter(function(a){return a.status==='late';}).length;
+  const ab=mA.filter(function(a){return a.status==='absent';}).length;
   const rate=mA.length>0?Math.round(((pr+la)/mA.length)*100):0;
-  document.getElementById('msRow').innerHTML=`
-    <div class="ms-i"><div class="ms-n g">${pr}</div><div class="ms-l">Present</div></div>
-    <div class="ms-i"><div class="ms-n a">${la}</div><div class="ms-l">Late</div></div>
-    <div class="ms-i"><div class="ms-n r">${ab}</div><div class="ms-l">Absent</div></div>
-    <div class="ms-i"><div class="ms-n g">${rate}%</div><div class="ms-l">Rate</div></div>`;
+  document.getElementById('msRow').innerHTML=
+    '<div class="ms-i"><div class="ms-n g">'+pr+'</div><div class="ms-l">Present</div></div>'+
+    '<div class="ms-i"><div class="ms-n a">'+la+'</div><div class="ms-l">Late</div></div>'+
+    '<div class="ms-i"><div class="ms-n r">'+ab+'</div><div class="ms-l">Absent</div></div>'+
+    '<div class="ms-i"><div class="ms-n g">'+rate+'%</div><div class="ms-l">Rate</div></div>';
 }
 </script>
 </body>
