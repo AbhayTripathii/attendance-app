@@ -612,7 +612,8 @@ async function apiFetch(path,options={}){
 
 const sess=JSON.parse(sessionStorage.getItem('at_session')||'null');
 const _tok=localStorage.getItem('at_token');
-if((!sess||sess.role!=='employee')&&!_tok){location.href='index.html';}
+// Allow access if either session OR token exists — token is enough
+if(!_tok && (!sess||sess.role!=='employee')){location.href='index.html';}
 
 let me=null;
 let calY=new Date().getFullYear(),calM=new Date().getMonth();
@@ -642,7 +643,13 @@ document.addEventListener('DOMContentLoaded',async()=>{
   try{
     const res=await apiFetch('/api/auth/me');
     me=res.user;
+    // Save session from API response
+    sessionStorage.setItem('at_session',JSON.stringify({
+      role:me.role, id:me.id, name:me.name, department_id:me.department_id
+    }));
   }catch(e){
+    console.error('Auth error:',e.message);
+    localStorage.removeItem('at_token');
     sessionStorage.clear();
     location.href='index.html';
     return;
