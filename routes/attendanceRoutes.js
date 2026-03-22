@@ -177,14 +177,20 @@ router.put('/checkout/:id', async (req, res) => {
 // ─── GET /api/attendance/employees — All employees list ──────
 router.get('/employees', async (req, res) => {
   try {
-    const [rows] = await db.execute(`
-      SELECT u.id, u.name, u.email, u.department_id, u.created_at,
+    const { admin_id } = req.query;
+    let query = `
+      SELECT u.id, u.name, u.email, u.department_id, u.created_at, u.admin_id,
              d.name AS department_name
       FROM users u
       LEFT JOIN departments d ON u.department_id = d.id
-      WHERE u.role = 'employee'
-      ORDER BY u.name
-    `);
+      WHERE u.role = 'employee'`;
+    const params = [];
+    if (admin_id) {
+      query += ' AND u.admin_id = ?';
+      params.push(admin_id);
+    }
+    query += ' ORDER BY u.name';
+    const [rows] = await db.execute(query, params);
     res.json({ data: rows });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch employees.' });
