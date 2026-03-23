@@ -966,12 +966,27 @@ function markCk(id){
   el.querySelector('.chk-mark').textContent='✓';
 }
 function updateBtns(){
-  const ready=snapDone&&gpsDone;
+  const ready=snapDone&&gpsDone&&faceDone;
   const rec=myAttendance.find(a=>a.date===today());
   const inBtn=document.getElementById('btnIn');
   const outBtn=document.getElementById('btnOut');
-  if(!rec||!rec.check_in_time){inBtn.disabled=!ready;if(ready)inBtn.className='btn primary';}
-  if(rec&&rec.check_in_time&&!rec.check_out_time){outBtn.disabled=!ready;if(ready)outBtn.className='btn danger';}
+  if(!rec||!rec.check_in_time){
+    // Not checked in yet — need all 3 steps to check in
+    inBtn.disabled=!ready;
+    if(ready) inBtn.className='btn primary';
+    outBtn.disabled=true;
+  } else if(rec.check_in_time&&!rec.check_out_time){
+    // Already checked in — check in button disabled, check out needs all 3 steps
+    inBtn.disabled=true;
+    inBtn.className='btn done-look';
+    inBtn.textContent='Checked In';
+    outBtn.disabled=!ready;
+    if(ready) outBtn.className='btn danger';
+  } else if(rec.check_out_time){
+    // Both done
+    inBtn.disabled=true; inBtn.className='btn done-look'; inBtn.textContent='Checked In';
+    outBtn.disabled=true; outBtn.className='btn done-look'; outBtn.textContent='Checked Out';
+  }
 }
 function selWT(t){
   wt=t;
@@ -1010,10 +1025,16 @@ async function markAtt(type){
       setSbar('in',ts);
       showAttAlert('Checked in at '+ts+'. Now capture face + GPS again to check out.','ok');
     }else{
-      // Re-fetch to get latest record including the just-completed check-in
-      try{const fresh=await apiFetch('/api/attendance?user_id='+me.id+'&limit=100');myAttendance=fresh.data||[];}catch(e){}
+      // Always fetch fresh attendance before checkout
+      try{
+        const fresh=await apiFetch('/api/attendance?user_id='+me.id+'&limit=100');
+        myAttendance=fresh.data||[];
+      }catch(e){ console.warn('Could not refresh attendance'); }
       const rec=myAttendance.find(a=>a.date===today());
-      if(!rec||!rec.check_in_time){showAttAlert('Check in first.','err');return;}
+      if(!rec||!rec.check_in_time){
+        showAttAlert('No check-in found for today. Please check in first.','err');
+        return;
+      }
       if(rec.check_out_time){showAttAlert('Already checked out.','err');return;}
       await apiFetch('/api/attendance/checkout/'+rec.id,{
         method:'PUT',
